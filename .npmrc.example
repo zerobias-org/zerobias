@@ -1,0 +1,26 @@
+# Sample .npmrc for working in zerobias-org sub-repos.
+#
+# All Zerobias-related NPM scopes (@zerobias-org and the closed-source
+# siblings @zerobias-com, @auditmation, @auditlogic) are served by the
+# org's private NPM registry at https://pkg.zerobias.org with a single
+# token (ZB_TOKEN). Anonymous reads to that registry return 401, so
+# `npm install` inside any sub-repo will fail unless ZB_TOKEN is set
+# in the environment.
+#
+# Usage:
+#   1. Copy this file:     cp .npmrc.example .npmrc   (or place it in $HOME)
+#   2. Set the env var:    export ZB_TOKEN=...
+#   3. Run npm install inside any sub-repo as normal.
+#
+# DO NOT replace ${ZB_TOKEN} with a literal token string.
+# DO NOT commit this file as `.npmrc` (it's already in .gitignore).
+#
+# If you don't have a ZB_TOKEN: you can still read source code, but you
+# can't install dependencies or publish. Contact the maintainers if you
+# need access for legitimate contribution.
+
+@zerobias-org:registry=https://pkg.zerobias.org/
+@zerobias-com:registry=https://pkg.zerobias.org/
+@auditmation:registry=https://pkg.zerobias.org/
+@auditlogic:registry=https://pkg.zerobias.org/
+//pkg.zerobias.org/:_authToken=${ZB_TOKEN}

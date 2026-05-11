@@ -1,0 +1,66 @@
+[submodule "app"]
+	path = app
+	url = https://github.com/zerobias-org/app.git
+[submodule "benchmark"]
+	path = benchmark
+	url = https://github.com/zerobias-org/benchmark.git
+[submodule "collectorbot"]
+	path = collectorbot
+	url = https://github.com/zerobias-org/collectorbot.git
+[submodule "compliance_feature"]
+	path = compliance_feature
+	url = https://github.com/zerobias-org/compliance_feature.git
+[submodule "crosswalk"]
+	path = crosswalk
+	url = https://github.com/zerobias-org/crosswalk.git
+[submodule "devops"]
+	path = devops
+	url = https://github.com/zerobias-org/devops.git
+[submodule "framework"]
+	path = framework
+	url = https://github.com/zerobias-org/framework.git
+[submodule "framework_test"]
+	path = framework_test
+	url = https://github.com/zerobias-org/framework_test.git
+[submodule "get-shit-done"]
+	path = get-shit-done
+	url = https://github.com/zerobias-org/get-shit-done.git
+[submodule "kb"]
+	path = kb
+	url = https://github.com/zerobias-org/kb.git
+[submodule "login"]
+	path = login
+	url = https://github.com/zerobias-org/login.git
+[submodule "module"]
+	path = module
+	url = https://github.com/zerobias-org/module.git
+[submodule "pipeline"]
+	path = pipeline
+	url = https://github.com/zerobias-org/pipeline.git
+[submodule "product"]
+	path = product
+	url = https://github.com/zerobias-org/product.git
+[submodule "schema"]
+	path = schema
+	url = https://github.com/zerobias-org/schema.git
+[submodule "segment"]
+	path = segment
+	url = https://github.com/zerobias-org/segment.git
+[submodule "standard"]
+	path = standard
+	url = https://github.com/zerobias-org/standard.git
+[submodule "suite"]
+	path = suite
+	url = https://github.com/zerobias-org/suite.git
+[submodule "types"]
+	path = types
+	url = https://github.com/zerobias-org/types.git
+[submodule "util"]
+	path = util
+	url = https://github.com/zerobias-org/util.git
+[submodule "vendor"]
+	path = vendor
+	url = https://github.com/zerobias-org/vendor.git
+[submodule "zb-dx"]
+	path = zb-dx
+	url = https://github.com/zerobias-org/zb-dx.git
