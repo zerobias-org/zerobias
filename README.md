@@ -178,6 +178,7 @@ Curated documentation lives under [`docs/`](docs/). Start here:
 | [`docs/Architecture.md`](docs/Architecture.md) | How the open-source pieces fit into the broader ZeroBias platform |
 | [`docs/ContentArtifacts.md`](docs/ContentArtifacts.md) | The content catalog system and how artifacts are published & loaded |
 | [`docs/Modules.md`](docs/Modules.md) | Hub module system: what modules are and how they're built |
+| [`docs/ModuleSDKs.md`](docs/ModuleSDKs.md) | Client SDKs for consuming Hub Modules and Platform Services (TypeScript, multi-language vision) |
 | [`docs/SubmoduleWorkflow.md`](docs/SubmoduleWorkflow.md) | Working with git submodules without losing your changes |
 | [`docs/LocalDevelopment.md`](docs/LocalDevelopment.md) | npm link patterns and cross-repo dependency chains |
 | [`docs/RegistrySetup.md`](docs/RegistrySetup.md) | NPM registry topology, ZB_TOKEN setup, what's reachable without a token |
