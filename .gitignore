@@ -1,0 +1,25 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+*.swp
+*.swo
+*~
+
+# Local environment overrides
+.env
+.env.local
+
+# Personal .npmrc (with real tokens). The committed file is .npmrc.example.
+.npmrc
+
+# Local-only Claude Code settings (per-developer)
+.claude/settings.local.json
+
+# Logs from helper scripts
+*.log
+
+# Node (in case anything top-level uses it)
+node_modules/
