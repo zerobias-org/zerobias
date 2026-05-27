@@ -204,9 +204,11 @@ objects matching declarations in
 
 `module/` ships its own `.gitmodules`. When working inside it, you may
 encounter nested submodules — typically vendor-specific SDKs or shared
-test fixtures. Standard submodule rules apply (see
-[`SubmoduleWorkflow.md`](SubmoduleWorkflow.md)); the meta-repo's
-submodule of `module/` is independent of `module/`'s own submodules.
+test fixtures. Standard git-submodule rules apply (refer to the git
+documentation: <https://git-scm.com/book/en/v2/Git-Tools-Submodules>).
+Note that `module/` itself is a plain clone inside this meta-repo — the
+meta-repo doesn't use submodules — so `module/`'s nested submodules are
+unrelated to anything in the meta-repo root.
 
 ---
 

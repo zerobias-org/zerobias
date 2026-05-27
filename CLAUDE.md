@@ -1,142 +1,208 @@
 # CLAUDE.md
 
-Guidance for [Claude Code](https://claude.com/claude-code) and other AI
-coding agents working in this repository.
+Self-contained guidance for [Claude Code](https://claude.com/claude-code)
+and other AI coding agents working in the `zerobias-org` open-source
+meta-repo. Read this file first; everything you need to bootstrap the
+workspace, update it, and work inside any sub-repo is here.
+
+---
 
 ## What this repo is
 
-This is the **`zerobias-org` open-source meta-repo**. It contains no code
-of its own — only documentation, helper scripts, and git submodules
-pointing at every public repository in the
-[`zerobias-org`](https://github.com/zerobias-org) GitHub organization.
+The **`zerobias-org` open-source meta-repo**. It ships only this
+documentation and a few helper scripts. The scripts clone every public
+repository from the [`zerobias-org`](https://github.com/zerobias-org)
+GitHub organization into this working tree as **standalone git clones**
+— no submodules, no pinned SHAs, no meta-repo state to maintain.
 
 Each subdirectory (`./framework/`, `./module/`, `./product/`, etc.) is a
-fully-independent git repo. The meta-repo's job is to give an agent a
-**single working tree** that spans the whole open-source surface, so it
-can read, search, and reason across all of them at once.
+fully-independent git clone. The meta-repo's value is giving the agent a
+**single working tree** spanning the whole open-source surface so it
+can read, search, and reason across all of them at once. PRs always go
+to the sub-repo's own GitHub remote.
 
-See [`README.md`](README.md) for the full repo inventory.
+For a human-oriented overview (vocabulary, repo inventory, common
+tasks), see [`README.md`](README.md). This file gives the agent-oriented
+view.
 
-## How to start a session
+---
 
-**Always start the agent from this directory** (the meta-repo root). That
-way Claude can:
+## First-action checklist
 
-- See every sub-repo's documentation and code at once.
-- Follow cross-references between repos (e.g. a product entry that links
-  to a vendor, segment, and compliance feature).
-- Suggest changes that span multiple repos.
+Before doing anything substantive, orient yourself:
+
+1. **Is the workspace bootstrapped?** Look for sub-repo directories at
+   the meta-repo root (e.g. `framework/`, `module/`, `vendor/`). If
+   they're missing, the user has only cloned the meta-repo skeleton —
+   run the bootstrap before continuing:
+
+   ```bash
+   ./scripts/clone-all.sh        # clones every public zerobias-org repo
+   ```
+
+   Requires the GitHub CLI (`gh`) authenticated. If `gh` isn't ready,
+   tell the user to run `gh auth login` first rather than trying
+   workarounds.
+
+2. **Did the user ask to refresh / update / sync everything?** Use
+   `update_all.sh`, ideally with `--dry-run` first so the user sees
+   the audit table before anything changes:
+
+   ```bash
+   ./scripts/update_all.sh --dry-run    # audit only
+   ./scripts/update_all.sh              # interactive plan-then-execute
+   ```
+
+   The script is safe-by-default: it audits every sub-repo, prompts
+   only for dirty/divergent ones, prints the full plan, and asks one
+   confirmation before any destructive action.
+
+3. **About to edit inside a sub-repo?** Always load that sub-repo's
+   own docs first — they override anything in this file. Look for, in
+   priority order:
+
+   - `<sub-repo>/README.md` — always present, always authoritative
+   - `<sub-repo>/CLAUDE.md` — agent rules for that sub-repo
+   - `<sub-repo>/CONTRIBUTING.md` — PR mechanics, scaffold scripts,
+     validation steps (`schema/CONTRIBUTING.md` is particularly
+     detailed)
+   - `<sub-repo>/.claude/` — sub-repo-specific skills, agents,
+     settings, hooks
+   - `<sub-repo>/.github/workflows/` — what CI will actually run on
+     the PR (useful for matching local validation to CI expectations)
+   - `<sub-repo>/MIGRATION_STATUS.md` — present in some content repos
+     (`vendor/`, `suite/`) that are mid-Lerna→Gradle migration; tells
+     you which command stack is canonical right now
+
+4. **Was the user vague about which sub-repo a change belongs in?**
+   Ask before editing. Common ambiguities:
+   - "module" alone could mean the spec (`module/`), the ETL
+     (`collectorbot/`), or the AuditgraphDB schema (`schema/`).
+   - "vendor X" might need entries in `vendor/`, `product/`, `suite/`,
+     and `segment/` — add them in that order.
+   - "framework" can mean the framework itself (`framework/`), the
+     standard it cites (`standard/`), or a crosswalk to another
+     framework (`crosswalk/`).
+
+---
+
+## Concepts at a glance
+
+Quick mental map of what each sub-repo owns. Use this to route a
+request to the right repo before reading deeper.
+
+**Compliance content**
+- `standard/` — formal published text (NIST, ISO, …) broken into Elements
+- `framework/` — Requirements (what must be done to comply)
+- `benchmark/` — test cases (how to comply on a specific technology)
+- `crosswalk/` — mappings between Requirements across Frameworks
+- `compliance_feature/` — what a product offers toward a Requirement
+- `kb/` — Hugo static-site documentation (NOT a content monorepo)
+
+**Catalog**
+- `vendor/` — companies that make things
+- `product/` — specific offerings by a vendor
+- `suite/` — groupings of related products
+- `segment/` — taxonomy for categorizing products
+
+**Integration**
+- `module/` — OpenAPI-defined Hub integrations (Gradle + `zbb` plugin)
+- `collectorbot/` — ETL shaping Module output into AuditgraphDB
+- `schema/` — AuditgraphDB class/link definitions (read its `CONTRIBUTING.md`)
+- `pipeline/` — small set of YAML pipeline configs
+
+**Apps & UX**
+- `app/` — Angular + Next.js SPA templates
+- `login/` — white-label login pages (Dana SDK + Handlebars)
+
+**Cross-cutting**
+- `types/` — TypeScript typedefs (consumed by every code repo)
+- `util/` — load-bearing libraries incl. the `zbb` Gradle plugin —
+  changes here cascade across the org, coordinate first
+- `devops/` — reusable GitHub Actions and workflows — changes cascade,
+  coordinate first
+
+**Skip**
+- `framework_test/` — actual GitHub fork of `framework/` for CI
+  validation; don't contribute compliance content here
+
+Full details in [`docs/Concepts.md`](docs/Concepts.md) and the
+"Repository reference" section of [`README.md`](README.md).
+
+---
+
+## Working inside a sub-repo
+
+Each sub-repo is an ordinary git clone. The meta-repo doesn't track or
+pin sub-repo state — anything committed inside a sub-repo lives in
+*that sub-repo's* history only.
+
+**The contribution loop:**
 
 ```bash
-cd path/to/zerobias-org   # meta-repo root
-claude                    # start Claude Code here
+cd <sub-repo>
+# load the sub-repo's own docs first (see First-action checklist #3)
+
+git switch -c <type>/<short-description>   # NEVER commit on main/master
+# ... edit ... run the repo's validate/test step ...
+git commit -m "<type>(<scope>): subject"
+git push -u origin <branch>
+gh pr create                               # opens against the sub-repo's GitHub
 ```
 
-If the developer has already `cd`'d *into* a sub-repo, the agent should
-proactively:
+Once the PR merges in that sub-repo, the work is done. **No follow-up
+meta-repo commit is needed** (and would be a no-op, since the meta-repo
+ignores sub-repo directories).
 
-1. Read that sub-repo's own `README.md` and `CLAUDE.md` (if present).
-2. Then read the **meta-repo's** `CLAUDE.md` (this file) and
-   `docs/Concepts.md` for cross-repo context.
-3. Mention to the developer that running from the meta-repo root unlocks
-   richer context.
-
-## Context-loading order for any task
-
-When a developer asks for help, load context in this order. Stop as soon
-as you have enough — don't read everything proactively.
-
-1. **Always:** this `CLAUDE.md`, plus
-   [`docs/Concepts.md`](docs/Concepts.md) for domain vocabulary.
-2. **Identify the target sub-repo(s).** Ask the developer if it's not
-   obvious. Examples of how to ask:
-   - "Which artifact are you changing — a framework, a benchmark, a
-     module, or something in the product catalog?"
-   - "Should this change live in `module/` (the integration spec) or
-     in `collectorbot/` (the ETL)?"
-3. **Read the sub-repo's `README.md` and `CLAUDE.md`** (if it has one).
-   Those override anything in this meta-repo.
-4. **Related sub-repos** — look at `docs/DOCUMENTATION_INDEX.md` for
-   "Concept → Repo" mappings. A change to `product/` might also touch
-   `vendor/`, `segment/`, or `compliance_feature/`.
-5. **Topical meta-repo docs** as needed: `docs/Architecture.md`,
-   `docs/ContentArtifacts.md`, `docs/Modules.md`,
-   `docs/SubmoduleWorkflow.md`, `docs/LocalDevelopment.md`.
-
-## Cross-repo work
-
-Many tasks span multiple sub-repos. A few common patterns:
-
-- **Adding a new product** (`product/`) usually means cross-referencing a
-  `vendor/`, fitting it into the `segment/` taxonomy, and possibly
-  declaring `compliance_feature/` entries.
-- **Adding a new framework** (`framework/`) often pairs with a matching
-  `crosswalk/` entry mapping its Requirements onto another framework, and
-  may reference `standard/` for the underlying formal document.
-- **Adding a Hub integration** (`module/`) typically pairs with a
-  `collectorbot/` ETL package that converts the module's output into
-  AuditgraphDB objects defined in `schema/`.
-
-When a task spans repos, list the affected sub-repos to the developer
-*before* editing anything, so they can confirm or redirect.
+---
 
 ## Editing rules
 
-- **Never edit inside a sub-repo without making it clear that the change
-  belongs to that sub-repo's git history**, not to the meta-repo. The
-  meta-repo only tracks *which commit* each submodule is pinned to.
-- **Use feature branches inside sub-repos.** Never commit straight to
-  `main`/`master`. After a sub-repo PR is merged, the meta-repo's pinned
-  SHA is updated separately (see `docs/SubmoduleWorkflow.md`).
-- **Follow conventional commits** in both sub-repos and meta-repo:
-  `feat:`, `fix:`, `deps:`, `chore:`, `docs:`, etc. Scope where it adds
-  value (e.g. `feat(module): ...`).
-- **Don't add LICENSE files to sub-repos** without checking what each one
-  already has. The meta-repo itself currently has no LICENSE — flag this
-  to the developer rather than picking one yourself.
-- **Don't create a CONTRIBUTING.md or LICENSE in this meta-repo** unless
-  the developer explicitly asks for one — they've been intentionally
-  deferred.
+- **Conventional commits everywhere** — `feat:`, `fix:`, `chore:`,
+  `docs:`, `deps:`. Scope where it adds value (e.g.
+  `feat(module): add Okta API client`).
+- **Never commit on `main` or `master`** inside a sub-repo. Always
+  branch first.
+- **Several content repos PR against `dev`, not `main`.** Check the
+  sub-repo's README before pushing.
+- **Don't add LICENSE files to sub-repos** without checking what each
+  already has. The meta-repo has no LICENSE — flag this to the user
+  rather than picking one.
+- **Don't create CONTRIBUTING.md or LICENSE in this meta-repo** unless
+  the user explicitly asks. They've been intentionally deferred.
+
+---
+
+## Cross-repo work
+
+Some tasks span multiple sub-repos. Common patterns to recognize and
+flag to the user *before* editing:
+
+- **New product** (`product/`) → typically needs `vendor/`,
+  `segment/`, possibly `compliance_feature/` entries
+- **New framework** (`framework/`) → often pairs with a `crosswalk/`
+  mapping and may reference `standard/`
+- **New Hub integration** (`module/`) → typically needs
+  `collectorbot/` (ETL) and `schema/` (AuditgraphDB types)
+
+When the change spans repos, list the affected sub-repos to the user
+*before* editing, so they can confirm or redirect.
+
+---
 
 ## Generated code
 
 Several sub-repos (especially `module/`, `types/`, `schema/`) include
 generated TypeScript / OpenAPI artifacts.
 
-- Don't edit files inside `generated/` (or similar) directories directly.
-- The OpenAPI spec, JSON schema, or `.yml` source is the source of truth —
-  edit that, then regenerate via the sub-repo's `npm run generate` (or
-  equivalent).
-- If unsure whether a file is generated, check the sub-repo's `README.md`
-  before editing.
+- Don't edit files inside `generated/` directories directly.
+- The OpenAPI spec, JSON schema, or `.yml` source is the source of
+  truth — edit that, then regenerate via the sub-repo's
+  `npm run generate` (or equivalent).
+- If unsure whether a file is generated, check the sub-repo's
+  `README.md` before editing.
 
-## Submodules: things that bite
-
-Submodules have sharp edges. The most common traps:
-
-1. **Detached HEAD after `git submodule update`.** If a sub-repo shows
-   `(HEAD detached at <sha>)`, *checkout a branch before making changes*.
-2. **Working on `main` inside a sub-repo.** Always make a feature branch
-   first.
-3. **Running `git submodule update` while in the middle of work.** This
-   resets the sub-repo to the meta-repo's pinned SHA and can throw away
-   your work-in-progress branch. Don't run it from inside a sub-repo
-   you're editing.
-
-Full walkthrough: [`docs/SubmoduleWorkflow.md`](docs/SubmoduleWorkflow.md).
-
-## When asked to "update everything"
-
-Use the helper scripts at the meta-repo root:
-
-```bash
-./scripts/update_all.sh      # pull latest main on every submodule
-./scripts/add_repos.sh       # discover any new zerobias-org repos
-```
-
-`update_all.sh` prints which submodules moved forward. After it runs,
-`git status` in the meta-repo will show those submodules as "modified" —
-that's expected; staging and committing them updates the pinned SHAs.
+---
 
 ## When asked about closed-source platform pieces
 
@@ -148,16 +214,20 @@ developer asks about:
 - The internal platform monorepo, REST/GraphQL APIs, dataloader
 - Internal infrastructure (Terraform, Helm, deployment slots)
 
-…those live in a separate, **private** organization and aren't accessible
-from this repo. Be honest: tell the developer the code isn't visible
-here, point them at any relevant public concept docs
-(`docs/Architecture.md` describes the contracts the open-source side
-must honour), and suggest they consult their internal docs.
+…those live in a separate, **private** organization and aren't
+accessible from this repo. Be honest: tell the developer the code isn't
+visible here, point at [`docs/Architecture.md`](docs/Architecture.md)
+for the public contracts the open-source side must honour, and suggest
+they consult their internal docs.
+
+---
 
 ## Quick reference
 
-- **Repo inventory & layout:** [`README.md`](README.md)
-- **Domain vocabulary:** [`docs/Concepts.md`](docs/Concepts.md)
-- **How docs are organized:** [`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md)
-- **How submodules work here:** [`docs/SubmoduleWorkflow.md`](docs/SubmoduleWorkflow.md)
-- **Local dev / npm link:** [`docs/LocalDevelopment.md`](docs/LocalDevelopment.md)
+- **Human-facing overview & repo inventory:** [`README.md`](README.md)
+- **Domain vocabulary (deep):** [`docs/Concepts.md`](docs/Concepts.md)
+- **"I want to do X" routing (deep):** [`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md)
+- **Cross-repo dependency / `npm link` patterns:** [`docs/LocalDevelopment.md`](docs/LocalDevelopment.md)
+- **NPM registry / `ZB_TOKEN` setup:** [`docs/RegistrySetup.md`](docs/RegistrySetup.md)
+- **Hub modules deep dive:** [`docs/Modules.md`](docs/Modules.md)
+- **Architecture & platform contracts:** [`docs/Architecture.md`](docs/Architecture.md)

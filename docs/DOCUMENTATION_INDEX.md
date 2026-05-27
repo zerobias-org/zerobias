@@ -21,7 +21,6 @@ agent) looks when they don't know where to start.
 | [`ContentArtifacts.md`](ContentArtifacts.md) | Packaging, publishing, and contribution mechanics for content-monorepo repos |
 | [`Modules.md`](Modules.md) | Hub Modules — Gradle+zbb stack, layout, contribution flow |
 | [`ModuleSDKs.md`](ModuleSDKs.md) | Client SDKs that consume Hub Modules and Platform Services (auto-generated from OpenAPI) |
-| [`SubmoduleWorkflow.md`](SubmoduleWorkflow.md) | Working with git submodules without losing changes |
 | [`LocalDevelopment.md`](LocalDevelopment.md) | `npm link` patterns for cross-repo dependency chains |
 | [`RegistrySetup.md`](RegistrySetup.md) | NPM registry topology + `ZB_TOKEN` setup (without it `npm install` fails) |
 
