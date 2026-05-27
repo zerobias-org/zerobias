@@ -251,6 +251,7 @@ you have the full picture. The files under [`docs/`](docs/) are
 | You're publishing or loading content packages | [`docs/ContentArtifacts.md`](docs/ContentArtifacts.md) |
 | You're building or fixing a Hub Module | [`docs/Modules.md`](docs/Modules.md) |
 | You're consuming Hub Modules from a client SDK | [`docs/ModuleSDKs.md`](docs/ModuleSDKs.md) |
+| You're setting up the `zb-knowledge` or `zb` MCP servers in Claude Code | [`docs/MCPs.md`](docs/MCPs.md) |
 | You hit cross-repo dependency issues (`npm link` patterns) | [`docs/LocalDevelopment.md`](docs/LocalDevelopment.md) |
 | `npm install` is failing inside a sub-repo (401 errors) | [`docs/RegistrySetup.md`](docs/RegistrySetup.md) |
 | You want the exhaustive "I want to do X → repo Y" routing | [`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md) |
@@ -281,6 +282,26 @@ to consult).
 
 [`zb-dx`](https://github.com/zerobias-org/zb-dx) bundles reusable Claude
 skills you can opt into.
+
+### MCP servers
+
+Two optional ZeroBias MCP servers extend an agent's reach into the
+ecosystem. Both authenticate with the **same** ZeroBias API key + org
+ID (gather once, configure both) and can be installed **globally
+across all projects** or **only for this one**. The `zb` server is
+single-org by default; if you work across multiple orgs, add more
+profiles later via `zb profile add`. See
+[`docs/MCPs.md`](docs/MCPs.md) for full setup, the scope decision, and
+troubleshooting.
+
+| Server | What it adds | Setup style |
+|--------|--------------|-------------|
+| **`zb-knowledge`** | Semantic code search + dependency / impact analysis across every indexed ZeroBias repo (`search_code`, `get_file`, `get_affected_files`, `get_dependency_chain`, `list_repos`, `check_package_versions`, `health_check`) | Hosted HTTP endpoint authenticated via Dana — `claude mcp add --transport http …` |
+| **`zb`** | Dynamic access to the entire ZeroBias platform SDK (~1,200 operations) via three meta-tools (`zerobias_search`, `zerobias_describe`, `zerobias_execute`) | Local npm package — `npm install -g @zerobias-com/zerobias-mcp` then `zb setup` |
+
+Running Claude Code from this meta-repo? Just ask: *"set up the MCPs"*
+and Claude Code will check which (if any) are missing and walk you
+through `claude mcp add` for whichever scope you pick.
 
 ---
 

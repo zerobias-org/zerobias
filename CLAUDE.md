@@ -131,6 +131,77 @@ Full details in [`docs/Concepts.md`](docs/Concepts.md) and the
 
 ---
 
+## MCP servers (when available)
+
+Two ZeroBias MCP servers extend an agent's reach in this ecosystem.
+Both require a ZeroBias account; neither is guaranteed to be
+configured for the current user.
+
+**Check availability first.** Look at your tool list for the prefixes
+below. If either is missing, **proactively offer to install it** —
+don't silently work around it and don't fabricate tool calls. The
+offer should cover:
+
+1. What the missing MCP adds (one-line summary of tools).
+2. **Scope choice** — project-only or global:
+   - **Global** (`claude mcp add -s user …`) — recommended for personal
+     dev machines; available in every project.
+   - **Project-only** (`claude mcp add …`, default scope) — stays
+     scoped to this repo; useful for shared / per-project credentials.
+3. **Shared credentials, with one caveat.** Both MCPs authenticate
+   with the **same** ZeroBias platform API key + org ID, generated
+   once from [`app.zerobias.com`](https://app.zerobias.com) →
+   Settings → API Keys. Tell the user they only need to gather creds
+   once even if they install both — *but* for `zb` specifically,
+   those creds scope data access to **that one org**. If the user
+   works across multiple orgs, mention that they can add more orgs
+   later as `zb` profiles (`zb profile add <name>` → `zb profile use
+   <name>`). `zb-knowledge` doesn't need profile switching — the
+   indexed code is shared and the org ID only proves access.
+
+Then run the `claude mcp add` commands from
+[`docs/MCPs.md`](docs/MCPs.md) with the values the user provides
+(never invent placeholder values — ask).
+
+### `zb-knowledge` — semantic code search
+
+Tool prefix: `mcp__zb-knowledge__*`. Hosted HTTP MCP, Dana-authenticated.
+
+| Tool | Use when… |
+|------|-----------|
+| `search_code` | The user asks "where is X implemented?" or "show me usages of Y" across repos |
+| `get_file` | You need to read a specific file from the knowledge base without having it cloned locally |
+| `list_repos` | You need to confirm which repos are indexed before searching |
+| `get_affected_files` | The user wants the transitive blast radius of changing a file |
+| `get_dependency_chain` | You're tracing a root cause through imports/exports |
+| `check_package_versions` | The user asks about a published version of a `@zerobias-org` / `@zerobias-com` package |
+| `health_check` | Sanity-check connectivity if other calls are failing |
+
+Reach for `zb-knowledge` *before* grepping the cloned working tree
+when the question is open-ended ("how is X done across the org?") —
+the semantic index is much faster than full-tree grep for that shape
+of question. For a targeted lookup of a known symbol or file, plain
+`grep`/`Read` on the local clone is fine.
+
+### `zb` — ZeroBias platform operations
+
+Tool prefix: `mcp__zb__zerobias_*`. Local stdio MCP, runs the
+ZeroBias SDK against the live platform.
+
+| Tool | Use when… |
+|------|-----------|
+| `zerobias_search` | The user asks about a platform operation by topic ("audit", "task", "boundary") |
+| `zerobias_describe` | You need the parameter schema for a specific operation before calling it |
+| `zerobias_execute` | You're running a platform operation against the live tenant; supports a `slim` parameter to keep responses small |
+
+This MCP **mutates real platform state** when you call write
+operations. Treat any non-`list`/`get` call as a hard-to-reverse
+action and confirm with the user before executing it.
+
+Setup details for either server: [`docs/MCPs.md`](docs/MCPs.md).
+
+---
+
 ## Working inside a sub-repo
 
 Each sub-repo is an ordinary git clone. The meta-repo doesn't track or
@@ -227,6 +298,7 @@ they consult their internal docs.
 - **Human-facing overview & repo inventory:** [`README.md`](README.md)
 - **Domain vocabulary (deep):** [`docs/Concepts.md`](docs/Concepts.md)
 - **"I want to do X" routing (deep):** [`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md)
+- **MCP server setup (`zb-knowledge`, `zb`):** [`docs/MCPs.md`](docs/MCPs.md)
 - **Cross-repo dependency / `npm link` patterns:** [`docs/LocalDevelopment.md`](docs/LocalDevelopment.md)
 - **NPM registry / `ZB_TOKEN` setup:** [`docs/RegistrySetup.md`](docs/RegistrySetup.md)
 - **Hub modules deep dive:** [`docs/Modules.md`](docs/Modules.md)
