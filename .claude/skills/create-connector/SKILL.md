@@ -31,7 +31,7 @@ otherwise a 6-phase, multi-repo flow.
 |-------|----------------|------|
 | 1 (discovery) | `Explore` | `zb` MCP + filesystem checks; returns a one-screen state table |
 | 2 (catalog gaps) | `general-purpose`, one per missing layer | Scaffold + marker + `gate` |
-| 3 (module) | `general-purpose` | Yeoman scaffold + `api.yml` skeleton + `gate` |
+| 3 (module) | `general-purpose` | Chains the existing `/create-module` in `module/` |
 | 4 (collectorbot) | `general-purpose` | Chains the existing `/create-collector` in `collectorbot/` |
 | 5 (interface wiring) | `general-purpose` | Interface picker via `zb` MCP, edits `collector.yml` + `src/Mappers.ts` |
 
@@ -111,31 +111,54 @@ For each missing layer, brief a separate `general-purpose` sub-agent.
 Each sub-agent reports the branch name and the produced `gate-stamp.json`
 path. The orchestrator relays and proceeds.
 
-## Phase 3 — scaffold the module (`general-purpose` sub-agent)
+## Phase 3 — chain `/create-module` (`general-purpose` sub-agent)
 
-Brief the sub-agent with the resolved inputs and the author email from
-Phase 0:
+`module/` has its own multi-phase scaffold workflow at
+`module/.claude/commands/create-module.md` — 6 phases driven by specialized
+sub-agents (`@product-specialist`, `@api-researcher`,
+`@module-scaffolder`, `@api-architect`, etc.). The orchestrator chains it;
+**do not reimplement the Yeoman invocation here.**
 
-```bash
+The sub-agent runs the existing leaf command in `module/`:
+
+```
 cd module
-yo @auditmation/hub-module \
-  --productPackage '@zerobias-org/product-<vendor>-[<suite>-]<product>' \
-  --modulePackage  '@zerobias-org/module-<vendor>-[<suite>-]<product>' \
-  --packageVersion '0.0.0' \
-  --description    '<Display Name>' \
-  --repository     'https://github.com/zerobias-org/module' \
-  --author         '<author-email-from-Phase-0>'
+/create-module <vendor> <product> [<suite>]
 ```
 
-After scaffold the sub-agent:
+(Note the arg order in module/: `vendor service [suite]`. Different from
+collectorbot's `vendor [suite] product`.)
 
-- Reads `module/README.md`, `module/CLAUDE.md`, `module/CONTRIBUTING.md` first.
-- Drops the Gradle marker: `plugins { id("zb.typescript-connector") }`.
-- Wires in the user-provided `api.yml` (or a minimal placeholder if the URL
-  isn't yet available).
-- Leaves `connectionProfile.yml` / `connectionState.yml` as scaffold defaults
-  for the user to refine.
-- Runs `./gradlew :<module-path>:gate` to confirm validation is green.
+That command already:
+
+- Discovers product metadata, API surface, auth requirements via its own
+  sub-agents.
+- Resolves `--author` from `git config user.email` and `--repository` from
+  `git config remote.origin.url`.
+- Picks `--moduleType` (`connector` if auth required, `plain` otherwise).
+- Runs `yo @zerobias-org/module` (the canonical generator from
+  `@zerobias-org/generator-module` — not `@auditmation/hub-module`).
+- Auto-runs `zbb build` (full gradle lifecycle) post-scaffold.
+- Designs the OpenAPI spec via `@api-architect` so we don't burn raw
+  upstream specs with broken `externalValue:` refs into `api.yml`.
+
+**Preconditions** the leaf command checks (orchestrator can pre-verify):
+
+- Node 22.21.x active (per `module/.nvmrc`).
+- Docker Desktop running.
+- `@zerobias-org/generator-module` installed globally
+  (`npm i -g @zerobias-org/generator-module`).
+
+If a precondition is missing, the leaf command fails fast — surface the
+error and stop. Do NOT bypass with a manual `yo` invocation; the leaf
+command's phase pipeline is what produces a working `api.yml`.
+
+> **Why this is a chain, not an inline scaffold:** earlier drafts of this
+> skill embedded `yo @auditmation/hub-module ...` directly. That generator
+> name was wrong, the hardcoded `--repository` URL was wrong, and skipping
+> the `@api-architect` design phase produced unusable `api.yml` files (raw
+> upstream specs with `externalValue:` refs to sibling example files that
+> aren't fetched). All of that is handled by `/create-module`.
 
 ## Phase 4 — chain `/create-collector` (`general-purpose` sub-agent)
 
@@ -223,6 +246,6 @@ catalog discovery is now best-effort.
 - Authoring concrete schema entries — deferred to next week.
 - Reimplementing scaffold logic that already lives in a sub-repo
   (vendor's `createNewProduct.sh`, suite's `createNewSuite.sh`,
-  product's `/create-product`, module's Yeoman generator,
+  product's `/create-product`, module's `/create-module`,
   collectorbot's `/create-collector`, schema's `createNewSchema.sh`).
 - Modifying sub-repo docs.
