@@ -202,6 +202,57 @@ Setup details for either server: [`docs/MCPs.md`](docs/MCPs.md).
 
 ---
 
+## CLI tools (offer to install / keep current)
+
+Some sub-repo workflows go through CLI tools that aren't part of the
+meta-repo itself. Before running them for the user, check they're
+installed — and if missing or stale, **offer to install or update**
+the same way you would for the MCPs above. Never silently work
+around a missing tool, and never auto-upgrade without asking.
+
+### `zbb` — ZeroBias slot/stack orchestrator CLI
+
+Published as `@zerobias-org/zbb`. Powers the canonical compile /
+publish / dataloader / slot workflows in `module/`, `vendor/`,
+`suite/`, `product/`, `collectorbot/`, `schema/`. The sub-repo's own
+docs assume `zbb` is on the user's `$PATH`.
+
+**Check:**
+
+```bash
+command -v zbb >/dev/null && zbb --version    # exits cleanly if installed
+```
+
+**Offer to install if missing:**
+
+```bash
+npm install -g @zerobias-org/zbb@latest
+```
+
+**Offer to update on demand** (when the user mentions "latest", hits a
+version-skew error, or asks to refresh tooling) — same command,
+`@latest` re-resolves to the newest published version.
+
+> ⚠️ Some sub-repos pin a specific `zbb` version in their docs (e.g.
+> `module/`'s validate step). If a pin is documented in the sub-repo,
+> honor it instead of `@latest`, and ask before changing a pinned
+> version.
+
+> Future plan: `zbb workspace clone` / `zbb workspace update`
+> subcommands will wrap `scripts/clone-all.sh` and `scripts/update_all.sh`
+> for users who already have `zbb` installed. Until those land, keep
+> using the bash scripts directly — they remain the dependency-free
+> bootstrap path.
+
+### Other CLIs to be aware of
+
+- **`gh`** — required by `scripts/clone-all.sh` to enumerate the org's
+  public repos. The script self-checks and prints install instructions
+  if it's missing; you don't need to pre-check.
+- **`claude` CLI** — assumed (you're inside it). No version check needed.
+
+---
+
 ## Working inside a sub-repo
 
 Each sub-repo is an ordinary git clone. The meta-repo doesn't track or
