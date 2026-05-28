@@ -84,6 +84,14 @@ Before doing anything substantive, orient yourself:
      standard it cites (`standard/`), or a crosswalk to another
      framework (`crosswalk/`).
 
+5. **Did the user ask to add / create / wire up a connector,
+   collector, or data source for some vendor or product?** Use the
+   [`/create-connector`](.claude/skills/create-connector/SKILL.md) skill —
+   it orchestrates the full vendor → suite? → product → module →
+   collectorbot chain via per-phase sub-agents (to keep context small),
+   discovers existing state via the `zb` MCP, and targets a schema
+   interface as a placeholder while concrete schema work is deferred.
+
 ---
 
 ## Concepts at a glance
