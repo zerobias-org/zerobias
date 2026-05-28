@@ -41,6 +41,18 @@ Each sub-agent brief includes: the resolved inputs, the specific sub-repo
 docs to read first, and a one-paragraph success criterion. If any sub-agent
 fails, stop and report — do not silently retry.
 
+**Deferred MCP tools.** The `mcp__zb__zerobias_*` tools are deferred and must
+be loaded with `ToolSearch` before they can be invoked. Any sub-agent that
+needs them must run, as its first action:
+
+```
+ToolSearch with query "select:mcp__zb__zerobias_search,mcp__zb__zerobias_describe,mcp__zb__zerobias_execute" and max_results 3
+```
+
+Same for `mcp__zb-knowledge__*` if a sub-agent needs the semantic index.
+Skipping this step is the #1 cause of sub-agents reporting "platform state
+unknown" — call it out in every relevant brief.
+
 ## Phase 0 — parse inputs, resolve author identity
 
 Stay in the main session.
@@ -65,10 +77,13 @@ hardcode in the skill body:
 
 Brief an `Explore` sub-agent with the resolved inputs and tell it to:
 
-- Call `mcp__zb__zerobias_execute` for each of:
-  - `portal.Vendor.search` with `{ searchVendorBody: { search: "<vendor>" } }`
-  - `portal.Suite.search` with `{ searchSuiteBody: { search: "<vendor> <suite>" } }` (if suite given)
-  - `portal.Product.search` with `{ searchProductBody: { search: "<vendor> <product>" } }`
+- Load the deferred `zb` MCP tools first (see "Deferred MCP tools" above).
+- Call `mcp__zb__zerobias_execute` for catalog discovery. These ops 404 on
+  missing — that's the absence signal:
+  - `store.Vendor.get` with `{ vendorCode: "<vendor>" }`
+  - `store.Suite.get` with `{ vendorCode: "<vendor>", suiteCode: "<suite>" }` (only if suite given)
+  - `store.Vendor.listProducts` with `{ vendorCode: "<vendor>" }` — then check whether the returned `items` include one with `packageCode === "<vendor>.<product>"`
+  - For suite-parented products: `store.Suite.listProducts` with `{ vendorCode, suiteCode }` and look for `packageCode === "<vendor>.<suite>.<product>"`
 - Cross-check local clones:
   - `/Users/ctamas/zerobias-org/vendor/package/<vendor>/`
   - `/Users/ctamas/zerobias-org/suite/package/<vendor>/<suite>/`
@@ -91,7 +106,7 @@ For each missing layer, brief a separate `general-purpose` sub-agent.
 |---------|----------------|
 | Vendor | `cd vendor`, read `vendor/README.md` first, run `sh scripts/createNewProduct.sh package/<vendor>`, drop `build.gradle.kts` with `plugins { id("zb.content") }`, run `./gradlew :<vendor>:gate`, leave branch ready (do not push). |
 | Suite | `cd suite`, read `suite/README.md` first, run `sh scripts/createNewSuite.sh <vendor>/<suite>`, drop the marker, run `./gradlew :<vendor>:<suite>:gate`, leave branch ready. |
-| Product | `cd product`, invoke the existing `/create-product` skill in that repo. It handles depth-2 vs depth-3 layout, `catalog.yml`, `npm-shrinkwrap.json`, and parent-ID lookup via the `portal.*` ops above. |
+| Product | `cd product`, invoke the existing `/create-product` skill in that repo. It handles depth-2 vs depth-3 layout, `catalog.yml`, `npm-shrinkwrap.json`, and parent-ID lookup. (Note: `product/.claude/skills/create-product/SKILL.md` currently references non-existent `portal.*.search` ops — if that skill fails on the MCP step, fall back to vendor-ID lookup via `store.Vendor.get` and pass the resolved UUID to the skill.) |
 
 Each sub-agent reports the branch name and the produced `gate-stamp.json`
 path. The orchestrator relays and proceeds.
@@ -148,10 +163,11 @@ subclasses at ingest time via a discriminator field.
 
 The sub-agent:
 
-- Enumerates available interfaces. Try `mcp__zb__zerobias_search` for
-  "schema interface" / "schema class" first; pick the right op via
-  `zerobias_describe`. Cross-check the local clone:
-  `/Users/ctamas/zerobias-org/schema/package/*/*/interfaces/*.yml`.
+- Loads the deferred `zb` MCP tools first (see "Deferred MCP tools" above).
+- Enumerates available interfaces from the local schema clone first —
+  `/Users/ctamas/zerobias-org/schema/package/*/*/interfaces/*.yml` — since
+  interfaces live in source, not on the platform. Optionally cross-check
+  via `zerobias_search` for "schema" if a relevant op exists.
 - Presents candidate generic interfaces to the user via `AskUserQuestion`,
   with the one-line `description:` field from each interface YAML. Common
   reusable bases: `Secret`, `DBMS`, `Element`, `Provider`, `CloudEnvironment`.
@@ -186,8 +202,11 @@ through PRs to the sub-repos, not direct platform writes.
 
 Three mandatory checkpoints use the MCP:
 
-1. **Catalog discovery** (Phase 1) — confirm absence via the `portal.*`
-   search ops before scaffolding. Local clones may be stale.
+1. **Catalog discovery** (Phase 1) — confirm presence/absence via
+   `store.Vendor.get` / `store.Suite.get` / `store.*.listProducts` before
+   scaffolding. Local clones may be stale. The `portal.*.search` ops cited
+   in some sub-repo docs do not exist in the live MCP — use the `store.*`
+   ops here.
 2. **Schema discovery** (Phase 5) — enumerate interfaces via
    `zerobias_search` + `_execute` before picking one.
 3. **Write guard** — any non-`list` / `get` / `search` op must pause and
