@@ -238,11 +238,10 @@ version-skew error, or asks to refresh tooling) — same command,
 > honor it instead of `@latest`, and ask before changing a pinned
 > version.
 
-> Future plan: `zbb workspace clone` / `zbb workspace update`
-> subcommands will wrap `scripts/clone-all.sh` and `scripts/update_all.sh`
-> for users who already have `zbb` installed. Until those land, keep
-> using the bash scripts directly — they remain the dependency-free
-> bootstrap path.
+> Note: there is intentionally no `zbb workspace clone/update`
+> shortcut. The bootstrap/refresh flow isn't slot-scoped, so it
+> doesn't fit `zbb`'s slot+stack model — the bash scripts in
+> `scripts/` are the canonical (and only) path.
 
 ### Other CLIs to be aware of
 

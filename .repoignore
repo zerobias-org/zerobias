@@ -1,7 +1,10 @@
 # Repositories in zerobias-org intentionally excluded from this meta-repo.
-# Maintained by scripts/add_repos.sh.
+# Maintained by scripts/refresh-repos-list.sh.
 # Format: one repo name per line. Comments start with #.
 
 # The org's GitHub configuration repository (profile README, issue templates,
 # workflow templates). Not a project; nothing useful to develop here.
 .github
+
+# The meta-repo itself — cloning it inside itself doesn't make sense.
+zerobias

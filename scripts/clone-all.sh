@@ -1,19 +1,19 @@
 #!/bin/bash
 #
-# clone-all.sh — clone every public zerobias-org repo into this meta-repo.
+# clone-all.sh — clone every public zerobias-org repo listed in
+# scripts/repos.list into this meta-repo root.
 #
-# Discovers repos via the GitHub CLI, skips anything listed in .repoignore,
-# and skips anything already cloned. Idempotent: re-running only clones repos
-# that aren't already present.
+# Reads the canonical list from scripts/repos.list (no live GitHub
+# lookup), skips anything in .repoignore, and skips repos that are
+# already cloned. Idempotent: re-running only clones what's missing.
 #
 # Usage:
 #   ./scripts/clone-all.sh              # clone any missing repos
-#   ./scripts/clone-all.sh --ssh        # use git@github.com:... URLs (for maintainers)
+#   ./scripts/clone-all.sh --ssh        # use git@github.com:... URLs
 #   ./scripts/clone-all.sh --help
 #
 # Requirements:
-#   - gh CLI installed and authenticated (`gh auth login`)
-#   - git
+#   - git  (that's it — no gh, no curl)
 
 set -u
 
@@ -24,12 +24,15 @@ usage() {
     cat <<EOF
 Usage: $0 [--ssh]
 
-Clone every public $ORG repo that isn't already present in the meta-repo root.
-Respects .repoignore (one repo name per line, # for comments).
+Clone every public $ORG repo listed in scripts/repos.list, skipping
+anything already present or listed in .repoignore.
 
 Options:
   --ssh        Clone with git@github.com:... (default is HTTPS)
   -h, --help   Show this help
+
+To refresh the list when the org adds a new repo, maintainers run
+./scripts/refresh-repos-list.sh (which uses gh).
 EOF
 }
 
@@ -45,12 +48,14 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.." || exit 1
 
-if ! command -v gh >/dev/null 2>&1; then
-    echo "❌ gh CLI not found. Install: https://cli.github.com/" >&2
+if ! command -v git >/dev/null 2>&1; then
+    echo "❌ git not found. Install git first." >&2
     exit 1
 fi
-if ! gh auth status >/dev/null 2>&1; then
-    echo "❌ gh CLI not authenticated. Run: gh auth login" >&2
+
+REPOS_FILE="scripts/repos.list"
+if [ ! -f "$REPOS_FILE" ]; then
+    echo "❌ Missing $REPOS_FILE. Run scripts/refresh-repos-list.sh (maintainer) to generate it." >&2
     exit 1
 fi
 
@@ -58,7 +63,6 @@ fi
 ignored=()
 if [ -f .repoignore ]; then
     while IFS= read -r line; do
-        # Strip comments and surrounding whitespace
         name="${line%%#*}"
         name="${name#"${name%%[![:space:]]*}"}"
         name="${name%"${name##*[![:space:]]}"}"
@@ -74,28 +78,34 @@ is_ignored() {
     return 1
 }
 
-echo "Discovering public repos in $ORG..."
-mapfile -t all_repos < <(gh api "orgs/$ORG/repos" --paginate \
-    --jq '.[] | select(.archived == false and .visibility == "public") | .name' \
-    | sort)
+# Read repos.list, stripping comments + blanks.
+repos=()
+while IFS= read -r line; do
+    name="${line%%#*}"
+    name="${name#"${name%%[![:space:]]*}"}"
+    name="${name%"${name##*[![:space:]]}"}"
+    [ -n "$name" ] && repos+=("$name")
+done < "$REPOS_FILE"
 
-if [ ${#all_repos[@]} -eq 0 ]; then
-    echo "⚠️  No repos found (or no access)." >&2
+if [ ${#repos[@]} -eq 0 ]; then
+    echo "⚠️  $REPOS_FILE is empty." >&2
     exit 1
 fi
+
+echo "Cloning from $REPOS_FILE (${#repos[@]} entries before filtering)…"
 
 cloned=0
 skipped_present=0
 skipped_ignored=0
 failed=0
 
-for repo in "${all_repos[@]}"; do
+for repo in "${repos[@]}"; do
     if is_ignored "$repo"; then
-        ((skipped_ignored++))
+        ((skipped_ignored++)) || true
         continue
     fi
     if [ -d "$repo/.git" ] || [ -d "$repo" ]; then
-        ((skipped_present++))
+        ((skipped_present++)) || true
         continue
     fi
 
@@ -107,10 +117,10 @@ for repo in "${all_repos[@]}"; do
 
     echo "  ↳ cloning $repo"
     if git clone --quiet "$url" "$repo"; then
-        ((cloned++))
+        ((cloned++)) || true
     else
         echo "    ⚠️  failed to clone $repo"
-        ((failed++))
+        ((failed++)) || true
     fi
 done
 

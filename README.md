@@ -58,9 +58,12 @@ Re-running `./scripts/clone-all.sh` is safe — it only clones repos that
 aren't already present. To refresh existing clones to the tip of their
 default branch, run `./scripts/update_all.sh`.
 
-**Requirements:** [GitHub CLI](https://cli.github.com/) (`gh`) installed
-and authenticated (`gh auth login`). `clone-all.sh` uses it to enumerate
-the org's public repos.
+**Requirements:** just `git`. The list of repos to clone lives in
+[`scripts/repos.list`](scripts/repos.list) (committed to this repo),
+so no GitHub-API lookup or `gh` CLI is needed at clone time.
+Maintainers refresh that list when the org adds a new repo via
+`scripts/refresh-repos-list.sh` (which does use `gh`).
+
 
 ---
 
@@ -235,6 +238,12 @@ when a working tree is dirty or diverged, shows the full plan, and only
 then applies changes. Pass `--dry-run` to see the state table without
 prompting. Repos on feature branches with clean working trees are
 auto-switched back to the default branch and fast-forwarded.
+
+> **Note:** the list of repos to clone lives in
+> [`scripts/repos.list`](scripts/repos.list). If a new public repo is
+> added to the org and not yet in that file, neither `clone-all.sh` nor
+> `zbb workspace clone` will pick it up. Maintainers regenerate the
+> list via `scripts/refresh-repos-list.sh`.
 
 ---
 
