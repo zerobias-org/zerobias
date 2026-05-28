@@ -54,6 +54,10 @@ cd zerobias-org
 That's it. You now have every public `zerobias-org` repo checked out
 underneath this directory, each on its default branch.
 
+> 👉 **Next stop:** [`QUICKSTART.md`](QUICKSTART.md) — Claude Code +
+> MCP setup, `ZB_TOKEN`, `zbb`, and ready-to-paste example prompts
+> for working in this meta-repo.
+
 Re-running `./scripts/clone-all.sh` is safe — it only clones repos that
 aren't already present. To refresh existing clones to the tip of their
 default branch, run `./scripts/update_all.sh`.
