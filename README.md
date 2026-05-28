@@ -5,11 +5,12 @@
 > the open-source side of the [ZeroBias](https://zerobias.com) compliance
 > automation platform.
 
-This repo doesn't ship code of its own. It's a thin **meta-repo** that uses
-git submodules to pull every public `zerobias-org` repository into a single
-working tree, alongside cross-repo documentation and tooling. Once cloned,
-you have a unified workspace where you (or a coding agent like
-[Claude Code](https://claude.com/claude-code)) can read, search, build and
+This repo doesn't ship code of its own. It's a thin **meta-repo** that hosts
+cross-repo documentation and helper scripts that clone every public
+`zerobias-org` repository into a single working tree. Each sub-repo is a
+plain, standalone git clone — no submodules, no pinned SHAs, just every
+repo side-by-side. Once set up, you (or a coding agent like
+[Claude Code](https://claude.com/claude-code)) can read, search, build, and
 contribute across all repositories without juggling separate clones.
 
 ---
@@ -29,47 +30,113 @@ ZeroBias is a compliance automation platform with a layered ecosystem:
 You can absolutely clone and work on any single `zerobias-org` repo on its
 own. The meta-repo is useful when you want to:
 
-- Get the **full open-source surface** in one `git clone`.
-- Make changes that **span multiple repos** (e.g. adding a new product
-  catalog entry that references a vendor and a segment).
+- Get the **full open-source surface** with one bootstrap step.
+- **Read, grep, and reason** across every repo from a single working tree.
 - Give an **AI coding agent** the full cross-repo context so it can answer
   questions, suggest implementations, and respect conventions across the
   whole ecosystem.
-- Run the **helper scripts** (`scripts/add_repos.sh`, `scripts/update_all.sh`)
-  that keep all sub-repos in sync.
+- Run the **helper scripts** (`scripts/clone-all.sh`, `scripts/update_all.sh`)
+  that bootstrap and keep all sub-repos in sync.
 
 ---
 
 ## Quick start
 
 ```bash
-# Clone with all submodules (recommended)
-git clone --recurse-submodules https://github.com/zerobias-org/zerobias.git
-cd zerobias
+# 1. Clone this meta-repo
+git clone https://github.com/zerobias-org/zerobias-org.git
+cd zerobias-org
 
-# Or, if you already cloned without --recurse-submodules:
-git submodule update --init --recursive
+# 2. Bootstrap every public zerobias-org repo into this working tree
+./scripts/clone-all.sh
 ```
 
 That's it. You now have every public `zerobias-org` repo checked out
-underneath this directory.
+underneath this directory, each on its default branch.
 
-### Working with a single sub-repo
+> 👉 **Next stop:** [`QUICKSTART.md`](QUICKSTART.md) — Claude Code +
+> MCP setup, `ZB_TOKEN`, `zbb`, and ready-to-paste example prompts
+> for working in this meta-repo.
 
-Each subdirectory is a fully-functional clone of the corresponding
-`zerobias-org` repository. Build, test and develop inside it exactly the
-way you would after a normal `git clone`:
+Re-running `./scripts/clone-all.sh` is safe — it only clones repos that
+aren't already present. To refresh existing clones to the tip of their
+default branch, run `./scripts/update_all.sh`.
+
+**Requirements:** just `git`. The list of repos to clone lives in
+[`scripts/repos.list`](scripts/repos.list) (committed to this repo),
+so no GitHub-API lookup or `gh` CLI is needed at clone time.
+Maintainers refresh that list when the org adds a new repo via
+`scripts/refresh-repos-list.sh` (which does use `gh`).
+
+
+---
+
+## Find your way around
+
+Every sub-repo is independent, but they form a small ecosystem with
+predictable roles. Once you know which repo owns what, the rest is just
+"open that repo and follow its README."
+
+### Concepts at a glance
+
+| Concept | Lives in | Owns |
+|---------|----------|------|
+| **Standard** | [`standard/`](https://github.com/zerobias-org/standard) | The formal published text (NIST, ISO, CIS, …), broken into Elements |
+| **Framework** | [`framework/`](https://github.com/zerobias-org/framework) | Requirements — *what* must be done to comply |
+| **Benchmark** | [`benchmark/`](https://github.com/zerobias-org/benchmark) | Test cases — *how* to achieve compliance on a specific technology |
+| **Crosswalk** | [`crosswalk/`](https://github.com/zerobias-org/crosswalk) | Mappings between Requirements across different Frameworks |
+| **Compliance Feature** | [`compliance_feature/`](https://github.com/zerobias-org/compliance_feature) | What a product offers toward satisfying a Requirement |
+| **KB Article** | [`kb/`](https://github.com/zerobias-org/kb) | Hugo static-site documentation |
+| **Vendor / Product / Suite / Segment** | [`vendor/`](https://github.com/zerobias-org/vendor), [`product/`](https://github.com/zerobias-org/product), [`suite/`](https://github.com/zerobias-org/suite), [`segment/`](https://github.com/zerobias-org/segment) | The catalog of who makes what, grouped into taxonomy |
+| **Module** | [`module/`](https://github.com/zerobias-org/module) | OpenAPI-defined Hub integration that talks to an external system |
+| **Collector Bot** | [`collectorbot/`](https://github.com/zerobias-org/collectorbot) | ETL that shapes Module output into AuditgraphDB objects |
+| **Schema** | [`schema/`](https://github.com/zerobias-org/schema) | AuditgraphDB class/link definitions |
+| **App / Login** | [`app/`](https://github.com/zerobias-org/app), [`login/`](https://github.com/zerobias-org/login) | Customer-facing SPAs and white-label login templates |
+| **Types / Util** | [`types/`](https://github.com/zerobias-org/types), [`util/`](https://github.com/zerobias-org/util) | Shared TypeScript types and load-bearing libraries (incl. `zbb` Gradle plugin) |
+| **DevOps** | [`devops/`](https://github.com/zerobias-org/devops) | Reusable GitHub Actions and workflows used by every content repo |
+
+For the full vocabulary including how artifacts cross-reference each
+other, see [`docs/Concepts.md`](docs/Concepts.md).
+
+### Common tasks → where they live
+
+| What you want to do | Open this repo | PR target |
+|---------------------|----------------|-----------|
+| Add a compliance framework | `framework/` | `dev` |
+| Add a standard (law/regulation text) | `standard/` | `main` |
+| Add a benchmark / test-case bundle | `benchmark/` | `dev` |
+| Map between two frameworks | `crosswalk/` | `dev` |
+| Tie a product to a Requirement it satisfies | `compliance_feature/` | `main` |
+| Add or update a vendor / product / suite / segment | `vendor/` / `product/` / `suite/` / `segment/` | usually `main` |
+| Build a new Hub integration | `module/` + `collectorbot/` + `schema/` | `main` |
+| Customize a tenant SPA or login screen | `app/` / `login/` | `main` |
+| Touch shared TypeScript types or `zbb` plugin | `types/` / `util/` | `main` (coordinate first) |
+| Change a reusable CI workflow | `devops/` | `main` (coordinate first) |
+
+Each row has full details (layout, scaffold script, special quirks) in
+[`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md).
+
+### Contribution flow
+
+Each sub-repo is a normal, standalone git clone. The flow is the same
+whether you cloned the meta-repo or just that one repo on its own:
 
 ```bash
-cd module        # or framework, or product, etc.
-cat README.md
-npm install && npm run build  # or whatever the sub-repo's README says
+cd <sub-repo>                                        # e.g. cd module
+cat README.md                                        # always read this first
+[ -f CLAUDE.md ]       && cat CLAUDE.md              # agent guidance, if any
+[ -f CONTRIBUTING.md ] && cat CONTRIBUTING.md        # repo-specific contrib rules
+
+npm install                                          # or the repo's build step
+git switch -c feat/my-change                         # never commit on main/master
+# ... edit, run the repo's validate/test step ...
+git commit -m "feat(scope): short description"
+git push -u origin feat/my-change
+gh pr create                                         # opens against the sub-repo's GitHub
 ```
 
-Changes you make to files inside a sub-repo are tracked by *that sub-repo's*
-git history — not by the meta-repo. See
-[`docs/SubmoduleWorkflow.md`](docs/SubmoduleWorkflow.md) for the full
-"how do I commit my changes" walkthrough.
+Once the PR merges, you're done — there is no follow-up commit needed in
+the meta-repo (it doesn't track sub-repo state).
 
 > ⚠️ **NPM registry caveat.** `@zerobias-org` packages live on a
 > **private NPM registry** (`https://pkg.zerobias.org/`) that returns
@@ -79,26 +146,21 @@ git history — not by the meta-repo. See
 > [`docs/RegistrySetup.md`](docs/RegistrySetup.md) for setup, and the
 > committed [`.npmrc.example`](.npmrc.example) for a reference config.
 
-### Keeping everything up to date
-
-```bash
-./scripts/update_all.sh        # pull latest main on every submodule
-./scripts/add_repos.sh         # discover new repos added to zerobias-org
-```
-
 ---
 
-## Repository inventory
+## Repository reference
 
-All sub-repos live **flat at the root** of this meta-repo (so
-`./framework/`, `./module/`, etc.) — no extra namespace folder, because the
-meta-repo itself *is* the `zerobias-org` namespace.
+This is the full inventory of sub-repos with layout details and per-repo
+quirks. The "Find your way around" tables above are the quick path; this
+section is for when you need to know the exact directory structure or
+which stack a repo uses.
 
-> Layouts and contribution flows have been verified by reading each
-> repo's actual README and inspecting its structure (May 2026). The
-> short descriptions below link to the exact contribution mechanism per
-> repo — see [`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md)
-> for the "I want to do X → run command Y in repo Z" table.
+All sub-repos live **flat at the root** of this meta-repo (`./framework/`,
+`./module/`, etc.) — no extra namespace folder, because the meta-repo
+itself *is* the `zerobias-org` namespace.
+
+> Layouts and contribution flows below were verified by reading each
+> repo's actual README and inspecting its structure (May 2026).
 
 ### Core libraries (multi-package node monorepos)
 
@@ -162,31 +224,55 @@ After scaffold: edit `index.yml`, then `npm install && npm shrinkwrap && npm run
 | [`framework_test`](https://github.com/zerobias-org/framework_test) | **Actual GitHub fork** of `framework` (`parent: zerobias-org/framework`). Used to validate GitHub Actions and PR workflows. **Do not contribute compliance content here** — open PRs against `framework` instead. |
 
 > **Note on excluded repos.** `.github` (the org-level meta repo for issue
-> templates and workflow defaults) is intentionally not a submodule —
-> there's nothing to develop there. Private and archived repos are also
-> excluded. See [`.repoignore`](.repoignore) for the full list.
+> templates and workflow defaults) is intentionally skipped — there's
+> nothing to develop there. Private and archived repos are also excluded.
+> See [`.repoignore`](.repoignore) for the full list.
 
 ---
 
-## Documentation
+## Keeping everything up to date
 
-Curated documentation lives under [`docs/`](docs/). Start here:
+```bash
+./scripts/update_all.sh        # bring every sub-repo to latest default branch
+./scripts/clone-all.sh         # also pull in any repos newly added to the org
+```
 
-| Document | What it covers |
-|----------|----------------|
-| [`docs/Concepts.md`](docs/Concepts.md) | Core domain concepts: Standards, Frameworks, Benchmarks, Crosswalks, Modules, Vendors, Products, Segments |
-| [`docs/Architecture.md`](docs/Architecture.md) | How the open-source pieces fit into the broader ZeroBias platform |
-| [`docs/ContentArtifacts.md`](docs/ContentArtifacts.md) | The content catalog system and how artifacts are published & loaded |
-| [`docs/Modules.md`](docs/Modules.md) | Hub module system: what modules are and how they're built |
-| [`docs/ModuleSDKs.md`](docs/ModuleSDKs.md) | Client SDKs for consuming Hub Modules and Platform Services (TypeScript, multi-language vision) |
-| [`docs/SubmoduleWorkflow.md`](docs/SubmoduleWorkflow.md) | Working with git submodules without losing your changes |
-| [`docs/LocalDevelopment.md`](docs/LocalDevelopment.md) | npm link patterns and cross-repo dependency chains |
-| [`docs/RegistrySetup.md`](docs/RegistrySetup.md) | NPM registry topology, ZB_TOKEN setup, what's reachable without a token |
-| [`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md) | Map from every concept to the doc that explains it |
-| [`CLAUDE.md`](CLAUDE.md) | Workflow guidance for Claude Code (and other coding agents) using this meta-repo |
+`update_all.sh` works in phases — it audits each sub-repo, prompts only
+when a working tree is dirty or diverged, shows the full plan, and only
+then applies changes. Pass `--dry-run` to see the state table without
+prompting. Repos on feature branches with clean working trees are
+auto-switched back to the default branch and fast-forwarded.
 
-Inside each sub-repo, look for its own `README.md` and (where present)
-`CLAUDE.md` — they hold the per-repo build/test/deploy specifics.
+> **Note:** the list of repos to clone lives in
+> [`scripts/repos.list`](scripts/repos.list). If a new public repo is
+> added to the org and not yet in that file, neither `clone-all.sh` nor
+> `zbb workspace clone` will pick it up. Maintainers regenerate the
+> list via `scripts/refresh-repos-list.sh`.
+
+---
+
+## Further reading
+
+This README is the primary, holistic doc — read it top to bottom and
+you have the full picture. The files under [`docs/`](docs/) are
+**deep-dive references** to consult only when you need more:
+
+| Open this when… | Document |
+|-----------------|----------|
+| You need the full domain vocabulary and how artifacts cross-reference each other | [`docs/Concepts.md`](docs/Concepts.md) |
+| You want the wider platform context (open-source vs closed-source, runtime contracts) | [`docs/Architecture.md`](docs/Architecture.md) |
+| You're publishing or loading content packages | [`docs/ContentArtifacts.md`](docs/ContentArtifacts.md) |
+| You're building or fixing a Hub Module | [`docs/Modules.md`](docs/Modules.md) |
+| You're consuming Hub Modules from a client SDK | [`docs/ModuleSDKs.md`](docs/ModuleSDKs.md) |
+| You're setting up the `zb-knowledge` or `zb` MCP servers in Claude Code | [`docs/MCPs.md`](docs/MCPs.md) |
+| You hit cross-repo dependency issues (`npm link` patterns) | [`docs/LocalDevelopment.md`](docs/LocalDevelopment.md) |
+| `npm install` is failing inside a sub-repo (401 errors) | [`docs/RegistrySetup.md`](docs/RegistrySetup.md) |
+| You want the exhaustive "I want to do X → repo Y" routing | [`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md) |
+| You're a coding agent looking for workflow rules | [`CLAUDE.md`](CLAUDE.md) |
+
+Each sub-repo's own `README.md` and (where present) `CLAUDE.md` /
+`CONTRIBUTING.md` hold the per-repo build/test/deploy specifics — those
+are authoritative for that repo and override anything here.
 
 ---
 
@@ -197,17 +283,38 @@ context** so they can answer questions, suggest implementations, and edit
 across multiple repositories coherently.
 
 ```bash
-cd zerobias              # start the agent from the meta-repo root
+cd zerobias-org          # start the agent from the meta-repo root
 claude                   # or the agent of your choice
 ```
 
-[`CLAUDE.md`](CLAUDE.md) documents the recommended workflow — load
-hierarchical context, ask about the target component, navigate via
-[`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md), and respect
-the per-sub-repo `CLAUDE.md` files for component-specific guidance.
+[`CLAUDE.md`](CLAUDE.md) is self-contained — an agent reading it on
+first sight has everything it needs to bootstrap the workspace, update
+it, and work inside sub-repos (including which per-sub-repo
+`README.md`, `CLAUDE.md`, `CONTRIBUTING.md`, and `.claude/` directories
+to consult).
 
 [`zb-dx`](https://github.com/zerobias-org/zb-dx) bundles reusable Claude
 skills you can opt into.
+
+### MCP servers
+
+Two optional ZeroBias MCP servers extend an agent's reach into the
+ecosystem. Both authenticate with the **same** ZeroBias API key + org
+ID (gather once, configure both) and can be installed **globally
+across all projects** or **only for this one**. The `zb` server is
+single-org by default; if you work across multiple orgs, add more
+profiles later via `zb profile add`. See
+[`docs/MCPs.md`](docs/MCPs.md) for full setup, the scope decision, and
+troubleshooting.
+
+| Server | What it adds | Setup style |
+|--------|--------------|-------------|
+| **`zb-knowledge`** | Semantic code search + dependency / impact analysis across every indexed ZeroBias repo (`search_code`, `get_file`, `get_affected_files`, `get_dependency_chain`, `list_repos`, `check_package_versions`, `health_check`) | Hosted HTTP endpoint authenticated via Dana — `claude mcp add --transport http …` |
+| **`zb`** | Dynamic access to the entire ZeroBias platform SDK (~1,200 operations) via three meta-tools (`zerobias_search`, `zerobias_describe`, `zerobias_execute`) | Local npm package — `npm install -g @zerobias-com/zerobias-mcp` then `zb setup` |
+
+Running Claude Code from this meta-repo? Just ask: *"set up the MCPs"*
+and Claude Code will check which (if any) are missing and walk you
+through `claude mcp add` for whichever scope you pick.
 
 ---
 
@@ -215,6 +322,6 @@ skills you can opt into.
 
 Almost all contributions belong inside one of the sub-repos, not this
 meta-repo. Pick a sub-repo, read its `README.md`, and open issues / PRs
-against **that sub-repo's** GitHub repository. The meta-repo is updated
-separately to bump the pinned submodule SHAs once your changes are
-merged.
+against **that sub-repo's** GitHub repository. The meta-repo only tracks
+the docs and helper scripts; it doesn't pin or coordinate sub-repo state,
+so there's nothing to bump here after your PR merges.

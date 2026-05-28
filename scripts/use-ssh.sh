@@ -1,48 +1,66 @@
 #!/bin/bash
-
-# use-ssh.sh - Rewrite submodule URLs from HTTPS to SSH (local only).
 #
-# The meta-repo ships HTTPS URLs so any outside contributor can clone and
-# fetch without GitHub credentials. If you push back to the org you'll
-# want SSH locally. This script updates your local .git/config (it does
-# NOT change .gitmodules), so it's safe to run on a personal clone.
+# use-ssh.sh — rewrite every sub-repo's origin URL from HTTPS to SSH (or back).
 #
-# To revert:  ./scripts/use-ssh.sh --revert
+# Sub-repos are cloned over HTTPS by default (zero-credential read access for
+# any contributor). Maintainers who push back to the org want SSH locally;
+# this script flips every cloned sub-repo's `origin` remote between the two.
+#
+# Usage:
+#   ./scripts/use-ssh.sh             # HTTPS  -> SSH
+#   ./scripts/use-ssh.sh --revert    # SSH    -> HTTPS
 
-set -e
+set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR/.." || exit 1
+META_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$META_ROOT" || exit 1
 
 REVERT=false
-if [ "$1" = "--revert" ] || [ "$1" = "-r" ]; then
+if [ "${1:-}" = "--revert" ] || [ "${1:-}" = "-r" ]; then
     REVERT=true
 fi
 
-SUBMODULES=$(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
+META_OWN_DIRS=(.claude .github docs scripts)
+is_meta_own() {
+    local d="$1"
+    for own in "${META_OWN_DIRS[@]}"; do
+        [ "$d" = "$own" ] && return 0
+    done
+    return 1
+}
 
-if [ -z "$SUBMODULES" ]; then
-    echo "No submodules found in .gitmodules"
-    exit 0
-fi
+count=0
+for entry in */ .[!.]*/; do
+    [ -d "$entry" ] || continue
+    name="${entry%/}"
+    is_meta_own "$name" && continue
+    [ -e "$name/.git" ] || continue
 
-for sub in $SUBMODULES; do
-    https_url=$(git config --file .gitmodules "submodule.$sub.url")
-    if [ "$REVERT" = true ]; then
-        # SSH -> HTTPS
-        new_url=$(echo "$https_url" | sed -E 's#git@github.com:#https://github.com/#')
-    else
-        # HTTPS -> SSH
-        new_url=$(echo "$https_url" | sed -E 's#https://github.com/#git@github.com:#')
+    cd "$META_ROOT/$name" || continue
+    old_url=$(git remote get-url origin 2>/dev/null || echo "")
+    if [ -z "$old_url" ]; then
+        cd "$META_ROOT"; continue
     fi
-    git config "submodule.$sub.url" "$new_url"
-    echo "  $sub -> $new_url"
+
+    if [ "$REVERT" = true ]; then
+        new_url=$(echo "$old_url" | sed -E 's#git@github.com:#https://github.com/#')
+    else
+        new_url=$(echo "$old_url" | sed -E 's#https://github.com/#git@github.com:#')
+    fi
+
+    if [ "$old_url" != "$new_url" ]; then
+        git remote set-url origin "$new_url"
+        echo "  $name → $new_url"
+        ((count++)) || true
+    fi
+    cd "$META_ROOT"
 done
 
-git submodule sync --recursive >/dev/null
-echo ""
 if [ "$REVERT" = true ]; then
-    echo "✅ Reverted to HTTPS submodule URLs (local only)"
+    echo ""
+    echo "✅ Reverted $count remote(s) to HTTPS"
 else
-    echo "✅ Switched to SSH submodule URLs (local only)"
+    echo ""
+    echo "✅ Switched $count remote(s) to SSH"
 fi

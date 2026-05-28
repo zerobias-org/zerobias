@@ -23,3 +23,12 @@ Thumbs.db
 
 # Node (in case anything top-level uses it)
 node_modules/
+
+# Sub-repo clones managed by scripts/clone-all.sh.
+# Each sub-repo lives at the root and is its own git clone — never tracked here.
+# We allow-list the meta-repo's own root directories.
+/*/
+!/.claude/
+!/.github/
+!/docs/
+!/scripts/
