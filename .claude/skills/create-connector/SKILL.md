@@ -10,8 +10,10 @@ description: |
   vendor/product not yet in the catalog with intent to make its data
   available. Discovers existing VSP + schema state via the zb MCP, chains the
   existing sub-repo scaffolds (createNewProduct.sh, createNewSuite.sh,
-  /create-product, yo @auditmation/hub-module, /create-collector), and
-  targets a schema interface so concrete classes can be authored later.
+  /create-product, /create-module, /create-collector), researches the
+  vendor's own taxonomy to decide suite-vs-no-suite (prefers suite
+  when one exists), and targets a schema interface so concrete classes
+  can be authored later.
 ---
 
 # create-connector
@@ -29,6 +31,7 @@ otherwise a 6-phase, multi-repo flow.
 
 | Phase | Sub-agent type | Owns |
 |-------|----------------|------|
+| 0.5 (research) | `general-purpose` | Web research on the vendor + product + catalog pre-probe; returns canonical codes + suite/no-suite decision |
 | 1 (discovery) | `Explore` | `zb` MCP + filesystem checks; returns a one-screen state table |
 | 2 (catalog gaps) | `general-purpose`, one per missing layer | Scaffold + marker + `gate` |
 | 3 (module) | `general-purpose` | Chains the existing `/create-module` in `module/` |
@@ -59,11 +62,15 @@ Stay in the main session.
 
 Required from the user (ask via `AskUserQuestion` if missing):
 
-- vendor code (e.g. `okta`)
-- product code (e.g. `okta`)
-- optional suite code (e.g. `aws` for `amazon/aws/s3`)
-- one-line product display name / description
-- OpenAPI spec URL (or "user will provide later")
+- **vendor name** in natural language (e.g. "Zscaler", "Amazon Web Services")
+- **product name** in natural language (e.g. "Zscaler Internet Access", "S3")
+
+Do **NOT** ask the user for canonical codes, whether a suite exists,
+the suite code, the product category, the auth method, or the
+OpenAPI spec URL. **Phase 0.5 derives all of those** from vendor
+docs + the existing catalog. Asking would push human judgment work
+back onto the user; the whole point of the research phase is to
+remove it.
 
 **Author identity** for the module scaffold — resolve in this order, never
 hardcode in the skill body:
@@ -73,9 +80,81 @@ hardcode in the skill body:
    prefix — e.g. `~/code/` and Zerobias paths → `ctamas@zerobias.com`)
 3. Ask the user via `AskUserQuestion`
 
+## Phase 0.5 — vendor / product research (`general-purpose` sub-agent)
+
+Brief a sub-agent with the natural-language vendor + product names from
+Phase 0. Its job is to convert those into a complete, catalog-ready
+profile **before** Phase 1 starts probing the catalog — otherwise the
+orchestrator doesn't know the right suite/product codes to probe with.
+
+The sub-agent's brief tells it to:
+
+1. **Research the vendor's own taxonomy via WebSearch + WebFetch.**
+   The vendor's marketing site / developer portal is the source of
+   truth for whether a product belongs to a named umbrella platform
+   or family. Examples of how the rule plays out:
+
+   | Vendor | Decision | Reasoning |
+   |--------|----------|-----------|
+   | Amazon | `aws` (suite) for `s3`, `ec2`, `iam` | Amazon publicly markets "AWS" as the umbrella |
+   | Microsoft | `365` for `entra`, `sharepoint`, `teams` | Microsoft 365 is the named family |
+   | Zscaler | `zte` for `zia`, `zpa`, `zdx` | Zero Trust Exchange is the named platform |
+   | Datadog | no suite — `vendor=datadog`, `product=datadog` | One-product vendor |
+   | Cloudflare | (judgment call) | Single marketing surface; lean suite if multiple products planned |
+
+2. **Pre-probe the existing catalog as a strong signal** via the `zb`
+   MCP (deferred — load via `ToolSearch` first per "Deferred MCP
+   tools" above):
+
+   - `store.Vendor.listSuites { vendorCode: <candidate> }` — does
+     the vendor already have any suite in the catalog?
+   - `store.Vendor.listProducts { vendorCode: <candidate> }` — what
+     products exist, and what's the `packageCode` shape (`<v>.<p>`
+     vs `<v>.<s>.<p>`)?
+
+3. **Decide suite-vs-no-suite** using these rules, in order:
+
+   - **a.** If the catalog already has the same vendor with a suite
+     layer, **match the existing convention**. Consistency over
+     correctness — the existing catalog wins ties.
+   - **b.** Else, default to suite-parented when the vendor publicly
+     markets a named umbrella platform.
+   - **c.** Use no-suite only when the company essentially IS the
+     product (one-product vendors), or when no named platform
+     exists.
+
+4. **Pick the best OpenAPI spec candidate** — search the vendor's
+   developer portal for an explicit OpenAPI / Swagger spec URL.
+   Always `curl -fsI <url>` to confirm it returns 200 before
+   recording it. If no clean spec exists, return `none` rather than
+   guessing — downstream `/create-module` handles spec design.
+
+5. **Return a structured proposal** in exactly this shape:
+
+   ```
+   vendor:     <code>          # canonical, lowercase, no spaces
+   suite:      <code> | none
+   product:    <code>
+   category:   <short label>   # e.g. "SSE / Secure Web Gateway"
+   auth:       <method>        # e.g. "OAuth 2.0; legacy API key + secret"
+   spec:       <url> | none    # HEAD-verified
+   siblings:   <list>          # other products under the same vendor/suite, with catalog presence noted
+   rationale:  <one line>      # why this is suite or no-suite
+   ```
+
+6. Total report under 200 words. The orchestrator then calls
+   `AskUserQuestion` with this proposal — options: **accept**,
+   **override one or more fields**, or **cancel**. Only on accept
+   does the orchestrator proceed to Phase 1 with these codes fixed.
+
+If the sub-agent can't reach the vendor's site or the `zb` MCP, it
+reports the gaps and falls back to asking the user — **never
+fabricates codes**.
+
 ## Phase 1 — discover what exists (`Explore` sub-agent)
 
-Brief an `Explore` sub-agent with the resolved inputs and tell it to:
+Brief an `Explore` sub-agent with the **canonical codes resolved by
+Phase 0.5** (vendor / suite / product, all lowercase) and tell it to:
 
 - Load the deferred `zb` MCP tools first (see "Deferred MCP tools" above).
 - Call `mcp__zb__zerobias_execute` for catalog discovery. These ops 404 on
