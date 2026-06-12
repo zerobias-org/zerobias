@@ -361,3 +361,7 @@ they consult their internal docs.
 - **NPM registry / `ZB_TOKEN` setup:** [`docs/RegistrySetup.md`](docs/RegistrySetup.md)
 - **Hub modules deep dive:** [`docs/Modules.md`](docs/Modules.md)
 - **Architecture & platform contracts:** [`docs/Architecture.md`](docs/Architecture.md)
+- **Dataloader artifact types & relations:**
+  [`.claude/docs/dataloader-artifact-map.md`](.claude/docs/dataloader-artifact-map.md)
+  — every loadable artifact type, its manifest files and linking fields;
+  interactive diagram at [`artifact-map/index.html`](artifact-map/index.html)

@@ -32,3 +32,4 @@ node_modules/
 !/.github/
 !/docs/
 !/scripts/
+!/artifact-map/
