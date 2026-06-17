@@ -1,209 +1,224 @@
 ---
 name: create-connector
 description: |
-  End-to-end orchestrator for adding a new connector (vendor → suite? → product →
-  module → collectorbot, with interface-targeted schema) in the zerobias-org
-  meta-repo. USE THIS PROACTIVELY when the user says anything like "add a
-  connector for X", "create a collector for vendor/product Y", "ingest /
-  collect / pull data from <SaaS>", "new integration for <vendor>", "wire up
-  <product> to the platform", "add a new data source", or names a
-  vendor/product not yet in the catalog with intent to make its data
-  available. Discovers existing VSP + schema state via the zb MCP, chains the
-  existing sub-repo scaffolds (createNewProduct.sh, createNewSuite.sh,
-  /create-product, yo @auditmation/hub-module, /create-collector), and
-  targets a schema interface so concrete classes can be authored later.
+  End-to-end orchestrator for adding a new DATA INTEGRATION (connector) in the
+  zerobias-org meta-repo: catalog → module → collectorbot, with interface-targeted
+  schema. USE THIS PROACTIVELY when the user says "add a connector for X", "create
+  a collector for vendor/product Y", "ingest / collect / pull data from <SaaS>",
+  "new integration for <vendor>", "wire up <product> to the platform", "add a new
+  data source", or names a vendor/product not yet in the catalog with intent to
+  make its data available. It does NOT reimplement the catalog work — Part 1
+  delegates to the `/create-product` skill (which checks if the product already
+  exists and asks what to do), then this skill adds the module + collectorbot and
+  targets a schema interface so concrete classes can be authored later. For
+  CATALOG-ONLY needs (no module/collectorbot) use `/create-product` directly.
 ---
 
 # create-connector
 
-Meta-repo orchestrator for the full flow: catalog (vendor → suite? → product)
-→ module → collectorbot → schema-interface wiring. **Chains existing sub-repo
-scaffolds; does not reimplement them.**
+Meta-repo orchestrator for the full data-integration flow:
+**catalog (→ `/create-product`) → module → collectorbot → schema-interface
+wiring.** Chains existing skills/scaffolds; does not reimplement them.
 
-## Execution model — orchestrator + per-phase sub-agents
+> **Read first:** [`.claude/docs/catalog-content-model.md`](../../docs/catalog-content-model.md)
+> for the catalog model. **The entire catalog side is owned by
+> [`/create-product`](../create-product/SKILL.md)** — this skill *calls* it for
+> Part 1, then adds module + collectorbot + schema. Don't duplicate catalog logic
+> (enums, suite decision, components/editions, feature wiring, PR §9 surface) here.
 
-The main session runs as a thin orchestrator and delegates each substantial
-phase to a dedicated sub-agent. The main session only sees the sub-agent's
-≤200-word final report per phase. This keeps the context small across what is
-otherwise a 6-phase, multi-repo flow.
+## Execution model — three parts, two mechanisms, one brief
 
-| Phase | Sub-agent type | Owns |
-|-------|----------------|------|
-| 1 (discovery) | `Explore` | `zb` MCP + filesystem checks; returns a one-screen state table |
-| 2 (catalog gaps) | `general-purpose`, one per missing layer | Scaffold + marker + `gate` |
-| 3 (module) | `general-purpose` | Chains the existing `/create-module` in `module/` |
-| 4 (collectorbot) | `general-purpose` | Chains the existing `/create-collector` in `collectorbot/` |
-| 5 (interface wiring) | `general-purpose` | Interface picker via `zb` MCP, edits `collector.yml` + `src/Mappers.ts` |
+| Part | What | Mechanism | Output package (→ local registry) |
+|------|------|-----------|-----------------------------------|
+| **1. Catalog** (vendor → suite? → product + components/editions + segments + features) | **delegated to `/create-product`** | that skill's in-session sub-agents | `@zerobias-org/product-<v>-<s?>-<p>` |
+| **2. Module** | this skill | **handoff** → native session in `module/` | `@zerobias-org/module-<v>-<s?>-<p>` |
+| **3. Collectorbot** | this skill (+ interface wiring + schema TODO) | **handoff** → native session in `collectorbot/` | `@zerobias-org/collectorbot-<v>-<s?>-<p>` |
 
-Phase 0 (parse inputs) and Phase 6 (TODO printout) stay in the main session.
+The three parts are a **publish→consume chain**: Part 3's `/create-collector`
+runs `npm view` / `npm install` against the product (Part 1) and module (Part 2)
+packages and **stops if they're missing**. Since we never push during a build,
+those packages are made available via the **local Verdaccio registry** (see
+"Local registry bridge"). This is mandatory, not optional.
 
-Each sub-agent brief includes: the resolved inputs, the specific sub-repo
-docs to read first, and a one-paragraph success criterion. If any sub-agent
-fails, stop and report — do not silently retry.
+### Two mechanisms — why module & collectorbot can't be sub-agents
 
-**Deferred MCP tools.** The `mcp__zb__zerobias_*` tools are deferred and must
-be loaded with `ToolSearch` before they can be invoked. Any sub-agent that
-needs them must run, as its first action:
+- **In-session sub-agents** drive Part 1 (inside `/create-product`) and this
+  orchestrator's own steps. A sub-agent **reads** the relevant sub-repo doc/script
+  and **follows it inline** — it does NOT invoke the sub-repo's slash-command
+  (those aren't registered in this session). The main session sees only each
+  sub-agent's ≤200-word report.
+- **Handoff prompts** drive Parts 2 & 3. `/create-module` fans out to ~20
+  sequential specialist agents; `/create-collector` → `/review-collector` fans out
+  to 8 **parallel** agents. A sub-agent **cannot spawn sub-agents**, so those
+  skills can only run in a **fresh top-level session opened in the sub-repo**. The
+  orchestrator fills a self-contained handoff prompt (templates:
+  `handoff-module-template.md`, `handoff-collector-template.md`), the user runs it
+  in a `module/` then `collectorbot/` session, and pastes the ≤200-word summary
+  back. The orchestrator records each result in the brief.
 
-```
-ToolSearch with query "select:mcp__zb__zerobias_search,mcp__zb__zerobias_describe,mcp__zb__zerobias_execute" and max_results 3
-```
+### The brief / manifest (shared state + handoff payload)
 
-Same for `mcp__zb-knowledge__*` if a sub-agent needs the semantic index.
-Skipping this step is the #1 cause of sub-agents reporting "platform state
-unknown" — call it out in every relevant brief.
-
-## Phase 0 — parse inputs, resolve author identity
-
-Stay in the main session.
-
-Required from the user (ask via `AskUserQuestion` if missing):
-
-- vendor code (e.g. `okta`)
-- product code (e.g. `okta`)
-- optional suite code (e.g. `aws` for `amazon/aws/s3`)
-- one-line product display name / description
-- OpenAPI spec URL (or "user will provide later")
-
-**Author identity** for the module scaffold — resolve in this order, never
-hardcode in the skill body:
-
-1. `git config user.email` inside the relevant working tree
-2. The author table in `~/.claude/CLAUDE.md` (matches by working-tree path
-   prefix — e.g. `~/code/` and Zerobias paths → `ctamas@zerobias.com`)
-3. Ask the user via `AskUserQuestion`
-
-## Phase 1 — discover what exists (`Explore` sub-agent)
-
-Brief an `Explore` sub-agent with the resolved inputs and tell it to:
-
-- Load the deferred `zb` MCP tools first (see "Deferred MCP tools" above).
-- Call `mcp__zb__zerobias_execute` for catalog discovery. These ops 404 on
-  missing — that's the absence signal:
-  - `store.Vendor.get` with `{ vendorCode: "<vendor>" }`
-  - `store.Suite.get` with `{ vendorCode: "<vendor>", suiteCode: "<suite>" }` (only if suite given)
-  - `store.Vendor.listProducts` with `{ vendorCode: "<vendor>" }` — then check whether the returned `items` include one with `packageCode === "<vendor>.<product>"`
-  - For suite-parented products: `store.Suite.listProducts` with `{ vendorCode, suiteCode }` and look for `packageCode === "<vendor>.<suite>.<product>"`
-- Cross-check local clones:
-  - `/Users/ctamas/zerobias-org/vendor/package/<vendor>/`
-  - `/Users/ctamas/zerobias-org/suite/package/<vendor>/<suite>/`
-  - `/Users/ctamas/zerobias-org/product/package/<vendor>/[<suite>/]<product>/`
-  - `/Users/ctamas/zerobias-org/module/package/<vendor>/[<suite>/]<product>/`
-  - `/Users/ctamas/zerobias-org/collectorbot/package/<vendor>/[<suite>/]<product>/`
-- Return a state table — for each layer (vendor / suite / product / module /
-  collectorbot), one of: `exists-platform-and-local`, `exists-platform-only`,
-  `exists-local-only`, `missing`.
-
-Show the report to the user; confirm the layers we'll scaffold before
-proceeding.
-
-## Phase 2 — fill catalog gaps (vendor → suite? → product)
-
-Order matters: vendor → suite → product. Skip layers that already exist.
-For each missing layer, brief a separate `general-purpose` sub-agent.
-
-| Missing | Sub-agent task |
-|---------|----------------|
-| Vendor | `cd vendor`, read `vendor/README.md` first, run `sh scripts/createNewProduct.sh package/<vendor>`, drop `build.gradle.kts` with `plugins { id("zb.content") }`, run `./gradlew :<vendor>:gate`, leave branch ready (do not push). |
-| Suite | `cd suite`, read `suite/README.md` first, run `sh scripts/createNewSuite.sh <vendor>/<suite>`, drop the marker, run `./gradlew :<vendor>:<suite>:gate`, leave branch ready. |
-| Product | `cd product`, invoke the existing `/create-product` skill in that repo. It handles depth-2 vs depth-3 layout, `catalog.yml`, `npm-shrinkwrap.json`, and parent-ID lookup. (Note: `product/.claude/skills/create-product/SKILL.md` currently references non-existent `portal.*.search` ops — if that skill fails on the MCP step, fall back to vendor-ID lookup via `store.Vendor.get` and pass the resolved UUID to the skill.) |
-
-Each sub-agent reports the branch name and the produced `gate-stamp.json`
-path. The orchestrator relays and proceeds.
-
-## Phase 3 — chain `/create-module` (`general-purpose` sub-agent)
-
-`module/` has its own multi-phase scaffold workflow at
-`module/.claude/commands/create-module.md` — 6 phases driven by specialized
-sub-agents (`@product-specialist`, `@api-researcher`,
-`@module-scaffolder`, `@api-architect`, etc.). The orchestrator chains it;
-**do not reimplement the Yeoman invocation here.**
-
-The sub-agent runs the existing leaf command in `module/`:
+The brief is **created by `/create-product` in Part 1** (from
+[`../create-product/brief-template.md`](../create-product/brief-template.md)) at:
 
 ```
-cd module
-/create-module <vendor> <product> [<suite>]
+/Users/ctamas/zerobias-org/.connector/<vendor>-[<suite>-]<product>.md
 ```
 
-(Note the arg order in module/: `vendor service [suite]`. Different from
-collectorbot's `vendor [suite] product`.)
+(`.connector/` is gitignored — transient state.) It is the single source of truth
+across all three parts: resolved codes, the chosen schema interface +
+discriminator, package names, per-part status, exact resolved commands, findings
+log. **Every handoff prompt points at the brief's absolute path** so a fresh
+sub-repo session has full context. This skill updates the brief after Parts 2 & 3;
+if any step fails, mark the brief `blocked`, log it, stop, and report — never
+silently retry.
 
-That command already:
+**Deferred MCP tools.** `mcp__zb__zerobias_*` (and `mcp__zb-knowledge__*`) are
+deferred — any sub-agent that needs them must first run
+`ToolSearch` with `select:mcp__zb__zerobias_search,mcp__zb__zerobias_describe,mcp__zb__zerobias_execute`.
+(`/create-product` already handles this for the catalog part.)
 
-- Discovers product metadata, API surface, auth requirements via its own
-  sub-agents.
-- Resolves `--author` from `git config user.email` and `--repository` from
-  `git config remote.origin.url`.
-- Picks `--moduleType` (`connector` if auth required, `plain` otherwise).
-- Runs `yo @zerobias-org/module` (the canonical generator from
-  `@zerobias-org/generator-module` — not `@auditmation/hub-module`).
-- Auto-runs `zbb build` (full gradle lifecycle) post-scaffold.
-- Designs the OpenAPI spec via `@api-architect` so we don't burn raw
-  upstream specs with broken `externalValue:` refs into `api.yml`.
+## Part 1 — catalog content (delegated to `/create-product`)
 
-**Preconditions** the leaf command checks (orchestrator can pre-verify):
+**Do not reimplement the catalog flow here — run `/create-product`.** It owns
+research → discovery → suite decision → scaffolding the whole catalog chain
+(vendor → suite? → product + components + editions + segments → compliance
+features → segment `supports.yml` → control links), validation via the gradle
+gate, the dossier, the brief, and the PR §9 SME-review surface.
 
-- Node 22.21.x active (per `module/.nvmrc`).
-- Docker Desktop running.
-- `@zerobias-org/generator-module` installed globally
-  (`npm i -g @zerobias-org/generator-module`).
+Crucially, `/create-product` **checks whether the product already exists and asks
+what to do**:
 
-If a precondition is missing, the leaf command fails fast — surface the
-error and stop. Do NOT bypass with a manual `yo` invocation; the leaf
-command's phase pipeline is what produces a working `api.yml`.
+- **Product missing** → it creates the product + all catalog dependents.
+- **Product exists** → it surfaces that and asks (update / add missing deps /
+  use-as-is). For the connector flow, **"use as-is" is the "go with that" path** —
+  you just need the product package available to consume in Parts 2–3.
 
-> **Why this is a chain, not an inline scaffold:** earlier drafts of this
-> skill embedded `yo @auditmation/hub-module ...` directly. That generator
-> name was wrong, the hardcoded `--repository` URL was wrong, and skipping
-> the `@api-architect` design phase produced unusable `api.yml` files (raw
-> upstream specs with `externalValue:` refs to sibling example files that
-> aren't fetched). All of that is handled by `/create-module`.
+Two things this skill is responsible for around the delegation:
 
-## Phase 4 — chain `/create-collector` (`general-purpose` sub-agent)
+1. **Author identity** for the *module* (Part 2) — resolve now and record in the
+   brief: `git config user.email` → the author table in `~/.claude/CLAUDE.md`
+   (matches by working-tree path prefix; Zerobias paths → `ctamas@zerobias.com`) →
+   ask via `AskUserQuestion`. (`/create-product` doesn't need it — catalog YAML has
+   no author field.)
+2. **Publish the product to the local registry** once it has gated green
+   (`zbb --slot cc-test registry publish`) so Part 3 can consume it — see "Local
+   registry bridge".
 
-The sub-agent runs the existing leaf skill in `collectorbot/`:
+Everything about enums, the NO-suite default, components/editions, the
+`segments → supports.yml` feature-wiring chain, and the PR §9 surface lives in
+`/create-product` + [`catalog-content-model.md`](../../docs/catalog-content-model.md).
 
-```bash
-cd collectorbot
-/create-collector <vendor> [<suite>] <product>
-```
+## Part 2 — module (handoff to a `module/` session)
 
-That skill already verifies module + schema deps, scaffolds directory and
-symlinks, runs install / generate / build / lint, and auto-validates via
-`/review-collector` (8-agent parallel review). **Do not reimplement any of
-it here.**
+`/create-module` (`module/.claude/commands/create-module.md`) is a 6-phase
+workflow that **sequentially invokes ~20 specialist agents**
+(`@product-specialist`, `@api-researcher`, `@api-architect`,
+`@module-scaffolder`, …). A sub-agent can't spawn those, and the command isn't
+registered in this session — so this part runs as a **handoff**, not a
+sub-agent. **Do not reimplement the Yeoman invocation here.**
 
-> The `collectorbot/` repo is expected to migrate from `npm` to `zbb` + ESM.
-> When that lands, the leaf skill will reflect it — this orchestrator stays
-> unchanged because it only invokes the leaf skill.
+The orchestrator:
 
-## Phase 5 — wire to a schema interface (`general-purpose` sub-agent)
+1. Fills `handoff-module-template.md` with the resolved codes + brief path and
+   writes it to `.connector/handoff-module-<connector>.md`.
+2. Tells the user to open a **new session in `module/`** and paste it. The
+   command (note arg order `vendor service [suite]`, different from
+   collectorbot's `vendor [suite] product`) is:
 
-Concrete schema work is deferred to next week. Until then, target an
-existing schema **interface** and let the dataloader materialize concrete
-subclasses at ingest time via a discriminator field.
+   ```
+   cd module
+   /create-module <vendor> <product> [<suite>]
+   ```
 
-The sub-agent:
+3. Waits for the user's ≤200-word summary, records it in the brief, then
+   ensures the module package is **published to the local registry** so Part 3
+   can consume it (`zbb --slot cc-test registry publish <module-package-dir>` —
+   see "Local registry bridge").
 
-- Loads the deferred `zb` MCP tools first (see "Deferred MCP tools" above).
-- Enumerates available interfaces from the local schema clone first —
-  `/Users/ctamas/zerobias-org/schema/package/*/*/interfaces/*.yml` — since
-  interfaces live in source, not on the platform. Optionally cross-check
-  via `zerobias_search` for "schema" if a relevant op exists.
-- Presents candidate generic interfaces to the user via `AskUserQuestion`,
-  with the one-line `description:` field from each interface YAML. Common
-  reusable bases: `Secret`, `DBMS`, `Element`, `Provider`, `CloudEnvironment`.
-- In the collectorbot's `collector.yml`, lists the chosen interface(s) under
-  `classes:` (the field name is `classes` but accepts interface names —
-  concrete subclasses are materialized at ingest time).
-- In `src/Mappers.ts`, ensures each emitted object carries:
-  - `id` — stable unique identifier from the source
-  - `name` — human-readable
-  - the **discriminator field** expected by the interface (`kind` / `type`)
-  - all required fields declared by the interface
+`/create-module` already discovers product metadata / API surface / auth via its
+own agents, resolves `--author` from `git config user.email` and `--repository`
+from the git remote, picks `--moduleType`, runs `yo @zerobias-org/module` (the
+canonical generator — **not** `@auditmation/hub-module`), auto-runs `zbb build`,
+and designs `api.yml` via `@api-architect`. **Do not bypass it with a manual
+`yo` call** — its phase pipeline is what produces a working `api.yml` (earlier
+inline drafts used the wrong generator name + a hardcoded `--repository` and
+produced unusable specs with dangling `externalValue:` refs).
 
-## Phase 6 — print schema TODO and stop
+**Preconditions** the handoff prompt restates (the leaf command fails fast if
+unmet, surface the error and stop): Node per `module/.nvmrc`, Docker running,
+`@zerobias-org/generator-module` installed globally.
+
+## Part 3 — collectorbot (handoff to a `collectorbot/` session)
+
+`/create-collector` ends by running `/review-collector`, which **requires 8
+parallel `Task` calls in a single message** — intrinsically a top-level
+multi-agent operation a sub-agent can't perform. So this part is also a
+**handoff**. **Do not reimplement any of it here.**
+
+Before generating the handoff, the orchestrator must have **fixed the schema
+interface in the brief** — do the schema-interface pick (below) *first*.
+
+The orchestrator:
+
+1. Fills `handoff-collector-template.md` with the resolved codes, the chosen
+   interface(s) + discriminator, and the brief path; writes it to
+   `.connector/handoff-collector-<connector>.md`.
+2. Tells the user to open a **new session in `collectorbot/`, inside the loaded
+   `cc-test` slot** (so npm resolves the product + module packages from local
+   Verdaccio). Command (arg order `vendor [suite] product`):
+
+   ```
+   zbb slot load cc-test
+   cd collectorbot
+   /create-collector <vendor> [<suite>] <product>
+   ```
+
+3. Waits for the ≤200-word summary (collector path, package name, interface(s),
+   generate status, `/review-collector` compliance %) and records it in the brief.
+
+The handoff prompt carries **three CRITICAL overrides** to the leaf skill,
+because its defaults will otherwise STOP or mis-author:
+
+- **Schema → base interface, not a vendor schema.** The leaf skill's Step 1.2
+  hard-checks `@auditlogic/schema-<v>-<p>` and STOPs if missing. **Skip that
+  check.** Depend on `@zerobias-org/schema-zerobias-zerobias-base` (+ `-ts`) and
+  target the interface, following the reference collector
+  `collectorbot/package/google/gcp/iam` (see schema-interface pick).
+- **Author** from `git config user.email`, not the skill's hardcoded value.
+- **Module / product deps from the local registry** (slot active); no push.
+
+> When `collectorbot/` migrates from `npm` to `zbb` + ESM, only the handoff
+> prompt's environment notes change — this orchestrator stays the same.
+
+## Schema-interface pick (orchestrator; wiring happens in Part 3)
+
+Concrete schema work is deferred. We collect directly to an existing base
+**interface**; the dataloader materializes a `Dynamic<Interface>` concrete
+subclass at ingest via a discriminator field. Reference implementation:
+`collectorbot/package/google/gcp/iam` (targets the `Principal` interface,
+depends on `@zerobias-org/schema-zerobias-zerobias-base` + `-ts`).
+
+This pick must happen **before** the Part 3 handoff, so the chosen interface is
+fixed in the brief and baked into the collector handoff prompt. The orchestrator:
+
+- Enumerates candidate interfaces from the local schema clone —
+  `/Users/ctamas/zerobias-org/schema/package/*/*/interfaces/*.yml` (interfaces
+  live in source, not on the platform). Common reusable bases: `Principal`,
+  `Secret`, `Provider`, `DBMS`, `CloudEnvironment`, `Account`, `Repository`.
+- Presents candidates to the user via `AskUserQuestion`, using each interface
+  YAML's one-line `description:`.
+- Records in the brief: the chosen interface(s), the schema package
+  `@zerobias-org/schema-zerobias-zerobias-base` (+ `-ts`), and the discriminator
+  field (`kind` / `type`, e.g. `principalType` in the GCP IAM reference).
+
+The actual wiring — the `collector.yml` `classes:` entry (the field is named
+`classes` but accepts interface names), `Mappers.ts` imports from `…-base-ts`,
+and the `id` / `name` / discriminator / interface-required fields on each
+emitted object — is performed **inside the Part 3 collector session** per the
+handoff prompt, not by a separate sub-agent here.
+
+## Finish — print schema TODO and stop
 
 Back in the main session. Print exactly:
 
@@ -218,34 +233,60 @@ TODO (schema, deferred):
 Do **not** scaffold an empty schema entry now — targeting interfaces removes
 the need this week.
 
+## Local registry bridge (the glue between the 3 parts)
+
+The parts hand packages to each other through a **local Verdaccio registry**
+(`zbb registry`, built into zbb) so a full build never touches a real registry
+and never needs a push.
+
+Setup once per machine:
+
+```
+zbb slot create cc-test
+zbb --slot cc-test registry start      # or auto-starts as a dep of dana
+zbb --slot cc-test registry status     # confirm healthy
+zbb --slot cc-test env get REGISTRY_URL
+```
+
+Flow:
+
+- **After Part 1**, publish the product package: from the product package dir
+  inside the slot, `zbb --slot cc-test registry publish` (or pass the path).
+  Verify with `zbb --slot cc-test registry list`.
+- **After Part 2**, publish the module package the same way.
+- **Part 3** runs inside the loaded slot, so `NPM_CONFIG_USERCONFIG` points npm
+  at local Verdaccio; `/create-collector`'s `npm view` / `npm install` of the
+  product + module resolve locally, and `@zerobias-org/schema-zerobias-zerobias-base`
+  proxies from GitHub Packages through Verdaccio (needs `GITHUB_TOKEN` /
+  `ZB_TOKEN` in env).
+- Between test runs, `zbb --slot cc-test registry clear` wipes local publishes
+  (next install re-fetches upstream).
+
+Record the registry URL and per-package publish status in the brief.
+
 ## `zb` MCP usage rules
 
-This skill is **read-only** against the `zb` MCP. Catalog additions go
-through PRs to the sub-repos, not direct platform writes.
+This skill is **read-only** against the `zb` MCP. Catalog additions go through PRs
+to the sub-repos (via `/create-product`), not direct platform writes.
 
-Three mandatory checkpoints use the MCP:
+- **Catalog discovery / suite decision** happen inside `/create-product` (Part 1)
+  via `store.Vendor.get` / `store.Suite.get` / `store.*.listProducts`. The
+  `portal.*.search` ops cited in some sub-repo docs do not exist — use `store.*`.
+- **Schema-interface pick** — enumerate interfaces from the local schema clone
+  (`schema/package/*/*/interfaces/*.yml`); no MCP call needed.
+- **Write guard** — any non-`list`/`get`/`search` op must pause and confirm with
+  the user. The orchestrator never writes through the MCP.
 
-1. **Catalog discovery** (Phase 1) — confirm presence/absence via
-   `store.Vendor.get` / `store.Suite.get` / `store.*.listProducts` before
-   scaffolding. Local clones may be stale. The `portal.*.search` ops cited
-   in some sub-repo docs do not exist in the live MCP — use the `store.*`
-   ops here.
-2. **Schema discovery** (Phase 5) — enumerate interfaces via
-   `zerobias_search` + `_execute` before picking one.
-3. **Write guard** — any non-`list` / `get` / `search` op must pause and
-   confirm with the user. The orchestrator never writes through the MCP.
-
-If the `zb` MCP isn't configured, fall back to filesystem checks and offer
-to install per the meta-repo `CLAUDE.md` MCP section. Flag loudly that
-catalog discovery is now best-effort.
+If the `zb` MCP isn't configured, fall back to filesystem checks and offer to
+install per the meta-repo `CLAUDE.md` MCP section; flag that discovery is
+best-effort.
 
 ## Out of scope
 
-- Pushing branches or opening PRs — scaffolding and validation only; the
-  user drives git via the existing `git` skill.
-- Authoring concrete schema entries — deferred to next week.
-- Reimplementing scaffold logic that already lives in a sub-repo
-  (vendor's `createNewProduct.sh`, suite's `createNewSuite.sh`,
-  product's `/create-product`, module's `/create-module`,
-  collectorbot's `/create-collector`, schema's `createNewSchema.sh`).
+- The catalog flow itself — owned by `/create-product` (don't duplicate it here).
+- Pushing branches or opening PRs — the user drives git via the `git` skill.
+- Authoring concrete schema entries — deferred (interface-targeted for now).
+- Reimplementing scaffold logic that lives in a sub-repo (module's
+  `/create-module`, collectorbot's `/create-collector`, schema's
+  `createNewSchema.sh`).
 - Modifying sub-repo docs.

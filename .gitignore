@@ -24,6 +24,12 @@ Thumbs.db
 # Node (in case anything top-level uses it)
 node_modules/
 
+# create-connector transient state — orchestration (brief + handoff prompts) and
+# the per-product research corpus (raw + semi-processed). Already covered by the
+# /*/ rule below; listed explicitly to document intent.
+.connector/
+.research/
+
 # Sub-repo clones managed by scripts/clone-all.sh.
 # Each sub-repo lives at the root and is its own git clone — never tracked here.
 # We allow-list the meta-repo's own root directories.
@@ -32,3 +38,4 @@ node_modules/
 !/.github/
 !/docs/
 !/scripts/
+!/artifact-map/

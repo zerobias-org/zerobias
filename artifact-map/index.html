@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZeroBias Platform — Dataloader Artifact Map</title>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --panel2: #273449; --text: #e2e8f0;
+    --muted: #94a3b8; --border: #334155; --accent: #38bdf8;
+    --catalog: #3b82f6; --compliance: #22c55e; --integration: #f97316;
+    --evidence: #a855f7; --org: #14b8a6; --meta: #64748b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  header { padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border);
+           display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header h1 small { color: var(--muted); font-weight: 400; margin-left: 8px; }
+  #search { background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+            padding: 5px 10px; border-radius: 6px; width: 180px; font-size: 13px; }
+  .toggles { display: flex; gap: 12px; align-items: center; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .toggles label { display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
+  .toggles input { accent-color: var(--accent); }
+  button { background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+           border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  #main { flex: 1; display: flex; min-height: 0; }
+  #cy { flex: 1; min-width: 0; }
+  #sidebar { width: 400px; background: var(--panel); border-left: 1px solid var(--border);
+             overflow-y: auto; padding: 16px; font-size: 13px; line-height: 1.5; flex-shrink: 0; }
+  #sidebar h2 { font-size: 17px; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
+  #sidebar h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+                margin: 16px 0 6px; border-bottom: 1px solid var(--border); padding-bottom: 3px; }
+  .badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; color: #fff; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .pill { display: inline-block; background: var(--panel2); border: 1px solid var(--border);
+          border-radius: 4px; padding: 1px 6px; font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; margin: 1px 2px 1px 0; }
+  code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-size: 12px; font-family: ui-monospace, Menlo, monospace; color: #fbbf24; }
+  ul { margin: 4px 0; padding-left: 18px; }
+  li { margin-bottom: 4px; }
+  .linkrow { padding: 5px 8px; background: var(--panel2); border-radius: 6px; margin-bottom: 5px; cursor: pointer; border: 1px solid transparent; }
+  .linkrow:hover { border-color: var(--accent); }
+  .linkrow b { color: var(--accent); }
+  .linkrow .via { color: var(--muted); font-size: 12px; display: block; }
+  .muted { color: var(--muted); }
+  #legend { position: absolute; bottom: 14px; left: 14px; background: rgba(30,41,59,.92); border: 1px solid var(--border);
+            border-radius: 8px; padding: 10px 14px; font-size: 11.5px; z-index: 5; }
+  #legend .row { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
+  #legend .dot { width: 11px; height: 11px; border-radius: 3px; }
+  #legend .line { width: 26px; height: 0; border-top-width: 2px; }
+  #modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 50; align-items: center; justify-content: center; }
+  #modal .box { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; max-width: 860px;
+                max-height: 85vh; overflow-y: auto; padding: 24px 28px; font-size: 13px; line-height: 1.55; }
+  #modal h2 { margin-top: 0; } #modal h3 { color: var(--accent); margin: 18px 0 6px; font-size: 14px; }
+  .ksection { position: relative; }
+  .hint { color: var(--muted); font-size: 12px; }
+  table.mini { border-collapse: collapse; width: 100%; font-size: 12px; margin: 6px 0; }
+  table.mini td, table.mini th { border: 1px solid var(--border); padding: 4px 7px; text-align: left; vertical-align: top; }
+  table.mini th { background: var(--panel2); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Dataloader Artifact Map <small>zerobias-com/platform · @zerobias-com/platform-dataloader · 37 registered types</small></h1>
+  <input id="search" type="text" placeholder="Find artifact type…">
+  <div class="toggles">
+    <label><input type="checkbox" id="t-ref" checked> manifest refs</label>
+    <label><input type="checkbox" id="t-dep" checked> npm load-order deps</label>
+    <label><input type="checkbox" id="t-db" checked> DB-level couplings</label>
+    <label><input type="checkbox" id="t-family" checked> loader family</label>
+    <label><input type="checkbox" id="t-tag"> tag edges</label>
+  </div>
+  <button id="btn-fit">Fit</button>
+  <button id="btn-layout">Reset layout</button>
+  <button id="btn-mech">Loading mechanics</button>
+</header>
+<div id="main">
+  <div class="ksection" style="flex:1; display:flex; min-width:0;">
+    <div id="cy"></div>
+    <div id="legend">
+      <div class="row"><span class="dot" style="background:var(--catalog)"></span> Catalog (VSP &amp; taxonomy)</div>
+      <div class="row"><span class="dot" style="background:var(--compliance)"></span> Compliance content</div>
+      <div class="row"><span class="dot" style="background:var(--integration)"></span> Integration / data plane</div>
+      <div class="row"><span class="dot" style="background:var(--evidence)"></span> Evidence &amp; queries</div>
+      <div class="row"><span class="dot" style="background:var(--org)"></span> Org, UX &amp; ops</div>
+      <div class="row"><span class="dot" style="background:var(--meta)"></span> Meta / stub / hidden</div>
+      <div class="row" style="margin-top:6px"><span class="line" style="border-top:2px solid #94a3b8"></span> manifest field reference</div>
+      <div class="row"><span class="line" style="border-top:2px dashed #94a3b8"></span> npm dependency (load order)</div>
+      <div class="row"><span class="line" style="border-top:2px dotted #f43f5e"></span> DB-level coupling</div>
+      <div class="row"><span class="line" style="border-top:2px solid #fbbf24"></span> loader-family specialization</div>
+    </div>
+  </div>
+  <div id="sidebar">
+    <h2>ZeroBias artifact map</h2>
+    <p>Every node is an <b>artifact type</b> the platform dataloader can load — an npm package whose
+       <code>package.json</code> declares <code>zerobias.import-artifact: "&lt;type&gt;"</code>
+       (legacy stanza name: <code>auditmation</code>). The type string — not the package name — routes
+       the package to its loader.</p>
+    <p><b>Click a node</b> for its manifest files, linking fields, DB write targets and notes.
+       <b>Click an edge</b> to see exactly which field/file creates the link.
+       Use the header toggles to show/hide edge kinds.</p>
+    <h3>How artifacts connect (4 mechanisms)</h3>
+    <ul>
+      <li><b>npm dependencies</b> — load ordering: the dataloader walks <code>npm list</code> and loads leaf deps first.</li>
+      <li><b>UUIDs</b> — stable <code>id:</code> values in YAML referenced across packages (e.g. product → segment ids).</li>
+      <li><b>codes / dotted identities</b> — human codes (<code>vendorCode</code>) and dotted package codes (<code>nist.800-53.v5.framework</code>).</li>
+      <li><b><code>$ref</code> into a dependency</b> — e.g. a module's OpenAPI references its product's <code>catalog.yml#/Product</code>.</li>
+    </ul>
+    <p class="hint">Sources: <code>dataloader/src/importer/loaderRegistry.ts</code> (37 entries),
+      per-processor READMEs in <code>dataloader/src/processors/</code> (zerobias-com/platform@main),
+      and package anatomy from the local zerobias-org content repo clones. Relations were discovered
+      down to the DAO/DB level; the diagram renders them conceptually.</p>
+  </div>
+</div>
+
+<div id="modal"><div class="box">
+  <h2>Loading mechanics</h2>
+  <h3>Type selection</h3>
+  <p>The loader registry (<code>buildLoaderRegistry()</code>) maps the lowercased
+  <code>zerobias.import-artifact</code> value to a loader class. Package-name prefixes
+  (<code>vendor-</code>, <code>module-</code>…) are convention only — never parsed for routing.
+  The <code>zerobias</code> stanza also carries: <code>package</code> (dotted identity),
+  <code>dataloader-version</code> (min loader version), <code>imports[]</code>, <code>skip</code>,
+  <code>deprecated</code>, <code>platform-content</code> (min platform schema version), <code>orgId</code>,
+  <code>migrates-from</code>.</p>
+  <h3>Ordering</h3>
+  <p>After <code>npm pack</code> + install, the dataloader runs <code>npm list -a --json --omit dev</code> and walks the
+  tree. Only packages scoped <code>@nfcc</code>, <code>@auditmation</code>, <code>@auditlogic</code>,
+  <code>@zerobias-org</code>, <code>@zerobias-com</code> with a registered <code>import-artifact</code> enter the
+  dependency list. Children are inserted <b>before</b> parents → leaf artifacts load first, the top-level package
+  last. Each dependency loads in its own DB transaction; first failure aborts the run. A <code>bundle</code>
+  artifact is an empty holder whose npm <code>dependencies</code> carry the real artifacts.</p>
+  <h3>Versioning &amp; environments</h3>
+  <p>Resolution uses npm dist-tags per environment (<code>ENV_TYPE</code>; prod → <code>latest</code>); a
+  <code>skip-dataloader</code> dist-tag skips that exact version. Types in the <i>unrevertable</i> set
+  (product, suite, vendor, framework, benchmark, standard, schema, evidencedefinition, query, evidencebot, kb,
+  tag, pipeline) refuse downgrades and retire older equivalents; other types can coexist in multiple versions.
+  Artifact identity = <code>UUIDv5(npm name)</code>.</p>
+  <h3>Naming equivalence (auditmation → zerobias rename)</h3>
+  <p><code>naming.ts</code> treats <code>@auditlogic ↔ @zerobias-org</code> and
+  <code>@auditmation ↔ @zerobias-com</code> as equivalent scopes and substitutes
+  <code>auditmation ↔ zerobias</code> in names/codes for installed-version checks, retirement and dedup.
+  <code>pipeline</code> is the only type that opts out.</p>
+  <h3>Artifact migration</h3>
+  <p><code>zerobias.migrates-from</code> re-parents a predecessor package's content rows onto the new artifact,
+  writes a <i>MigratedArtifact</i> sentinel blocking future loads of the old name, and enforces manifest-ID parity
+  before and after. Not allowed for vendor / suite / product.</p>
+  <h3>Post-load events</h3>
+  <p>Loaders publish events after commit: <code>base.ResourceLinker</code> (standard / framework / benchmark /
+  crosswalk / workflow / kb-style generic links), <code>base.BenchmarkLoaded</code>,
+  <code>base.ComplianceFeatureRescan</code>, <code>base.SyncBuiltInRoles</code> (rbac / role / sop).</p>
+  <h3>Hidden DB-level couplings (not obvious from manifests)</h3>
+  <ul>
+    <li>product and segment both write <code>Offering</code> + <code>ComplianceFeatureSupport</code> — a shared support matrix.</li>
+    <li>pipeline writes <code>Cron</code> rows (type collector_bot) into the same table the cron artifact owns, plus shared-boundary <code>BoundaryProduct</code>/<code>Component</code>.</li>
+    <li>rbac, role, sop and workflow all converge on <code>CatalogRole</code>.</li>
+    <li>benchmark test-case <code>subjectTypes[]</code> must equal existing schema <code>Class</code> names.</li>
+    <li>SCF tables (<code>ScfControl</code>/<code>ScfDomain</code>) are written only by <code>complianceforge.scf*</code> framework packages — evidencedefinition and sop link against them.</li>
+    <li>module ↔ oauth meet in <code>OAuthProvider</code> (provider resolved per VSP).</li>
+  </ul>
+  <p style="text-align:right"><button onclick="document.getElementById('modal').style.display='none'">Close</button></p>
+</div></div>
+
+<script>
+const GROUPS = {
+  catalog:     { color: '#3b82f6', name: 'Catalog' },
+  compliance:  { color: '#22c55e', name: 'Compliance content' },
+  integration: { color: '#f97316', name: 'Integration / data plane' },
+  evidence:    { color: '#a855f7', name: 'Evidence & queries' },
+  org:         { color: '#14b8a6', name: 'Org, UX & ops' },
+  meta:        { color: '#64748b', name: 'Meta / stub' },
+};
+
+// ---------------------------------------------------------------- nodes
+const NODES = [
+{ id:'vendor', group:'catalog',
+  desc:'A company that makes things. Root of the Vendor → Suite → Product (VSP) catalog chain.',
+  files:['index.yml (VendorStructure)','logo.svg|png|jpg'],
+  fields:['id (UUID)','code (^[a-z0-9_]+$) — must equal zerobias.package','name, status, url, description','aliases[]','cpeVendors[] → CPE dictionary','tags[] (UUIDs)'],
+  db:['Package (type Vendor)','Vendor resource','resource_tag rows'],
+  notes:['Pattern: @zerobias-org/vendor-&lt;code&gt;. No deps — loads first.','Unrevertable type: newer versions retire older ones.'] },
+{ id:'suite', group:'catalog',
+  desc:'A grouping of related products under one vendor (e.g. amazon.aws).',
+  files:['index.yml (SuiteStructure)','logo.*'],
+  fields:['id, code','vendorId (UUID, must exist)','vendorCode (must match resolved vendor)','tags[]'],
+  db:['Package (Suite)','Suite (parentId = vendorId)','resource_tag'],
+  notes:['Identity = &lt;vendorCode&gt;.&lt;code&gt;. Vendor package must be an npm dependency so it loads first.'] },
+{ id:'product', group:'catalog',
+  desc:'A specific offering by a vendor (optionally inside a suite). The anchor most integration artifacts point at.',
+  files:['index.yml (ProductStructure)','catalog.yml (Product block + Operations map — what modules $ref)','components/*.yml','editions/*.yml','features/*.yml','supports.yml','logo.*'],
+  fields:['parentType: vendor|suite','vendorId / vendorCode','suiteId / suiteCode','segments[] (segment UUIDs)','cpeProducts[] (vendor:product)','tags[]','supports.yml → complianceFeature + edition + status/strength'],
+  db:['Package (Product)','Product + ProductVersion','ProductComponent/Edition (+Versions; auto “Standard” edition)','ComplianceFeature(+Version) from features/*.yml','Offering rows','ComplianceFeatureSupport','catalog Operations','resource_tag'],
+  notes:['Identity: &lt;vendor&gt;.[&lt;suite&gt;.]&lt;product&gt;.','features/*.yml mints a child compliance_feature package (&lt;package&gt;.&lt;code&gt;.compliance_feature).','Writes the same Offering/ComplianceFeatureSupport matrix as segment (DB-level coupling).'] },
+{ id:'segment', group:'catalog',
+  desc:'Taxonomy node for categorizing products (domain → category → tool/service → feature group).',
+  files:['index.yml','supports.yml'],
+  fields:['segmentType (code)','parents[] (segment codes → self-referential hierarchy)','id, code (prefix encodes level: c_, t_, fg_, s_)','supports[].complianceFeature (UUID|code|packageCode) + status/strength','tags[]'],
+  db:['Package (Segment)','Segment + SegmentVersion (id = v5(version, segmentId))','Offering (type Segment)','ComplianceFeatureSupport','resource_tag'],
+  notes:['Products reference segments by UUID in index.yml segments[].'] },
+{ id:'segment_type', group:'catalog',
+  desc:'The rank taxonomy for segments (domain=1, category=2, tool/service=3, feature_group=4).',
+  files:['index.yml (segmentTypes[] of {id, name, code, rank, isService?})'],
+  fields:['code','rank','isService'],
+  db:['Package (SegmentType)','SegmentType rows'],
+  notes:['Single package in practice: @zerobias-org/segment_type-zerobias.'] },
+{ id:'tag', group:'catalog',
+  desc:'Org-wide tag dictionary. Referenced by UUID from tags[] arrays in nearly every other artifact type.',
+  files:['<TagType dirs>/<name>.yml ({id, description}; name from filename)'],
+  fields:['directory name = TagType','filename = tag name','id (UUID)'],
+  db:['TagType','Tag'],
+  notes:['Toggle “tag edges” in the header to see who references tags.'] },
+{ id:'catalog_overview', group:'catalog',
+  desc:'Configuration of the catalog overview UI: folders of countable resource rows.',
+  files:['folders/*.yml ({name, description, rank, rows[]})'],
+  fields:['rows[].resourceType | rows[].className (schema class) | rows[].countQuery (SQL)'],
+  db:['CatalogOverviewItem (full reconciliation per load)'],
+  notes:[] },
+
+{ id:'standard', group:'compliance',
+  desc:'Formal published text (NIST, ISO, laws…) broken into a tree of Elements. Base of the standard/framework/benchmark loader family.',
+  files:['index.yml (StandardIndexStructure)','elements/<code>.yml (one per element)','baselines/<code>.yml'],
+  fields:['id, code, standardType, standardCategory','elementTypes[] {id, code, name}','mappingTypes[] (which element types are crosswalk-mappable)','links (Record<linkType, alias[]> → generic resource linking)','elements: parent (code, wired in 2nd pass), externalId, aliases'],
+  db:['Standard','ElementType','Element','Baseline + BaselineElement','Package (Standard)'],
+  notes:['Emits base.ResourceLinker after load.','A “Default” baseline is auto-created.'] },
+{ id:'framework', group:'compliance',
+  desc:'Requirements — what must be done to comply. A standard specialization whose mapped elements become Controls.',
+  files:['index.yml (standardType forced to framework)','elements/*.yml (control fields)','baselines/**'],
+  fields:['mappingTypes[] (required) → which elements become Controls','control fields: intent, controlQuestion, guidance, methodsToComply, controlWeighting, functionGrouping, cmm_0..cmm_5','overlayStandard (package code) + overlayElement (code) → element of another standard'],
+  db:['Everything standard writes, plus:','Framework (id = v5(standard.id, NIL))','FrameworkElement','Control (+CMM)','BaselineFrameworkElement','ScfControl/ScfDomain (complianceforge.scf* packages only)'],
+  notes:['npm dep on its publisher suite anchors it in the catalog.','SCF packages are special: they populate the SCF tables that evidencedefinition and sop link against.'] },
+{ id:'benchmark', group:'compliance',
+  desc:'Test cases — how to verify compliance on a specific technology. A standard specialization whose mapped elements become TestCases.',
+  files:['index.yml (standardType: benchmark, standardCategory)','elements/*.yml','elements/<code>-acceptanceCriteria.md / -remediation.md','baselines/**'],
+  fields:['severity','subjectTypes[] — each must equal an existing schema Class name','parameters','mappingTypes[]'],
+  db:['Everything standard writes, plus:','Benchmark','BenchmarkElement','TestCase (+ subject types)','TestSuite (v5(benchmark.id, NIL))','BaselineBenchmarkElement'],
+  notes:['Emits base.BenchmarkLoaded + base.ResourceLinker.','subjectTypes is a hard link into the schema graph — validated against Class at load time.'] },
+{ id:'crosswalk', group:'compliance',
+  desc:'Mappings between elements of two standards/frameworks.',
+  files:['index.yml','elements.yml','versions/<semver>.yml (≥1, filename = version)'],
+  fields:['sourceStandard / targetStandard (dotted package codes → standardDao.getByPackage)','elements[]: sourceElement / targetElement (alias or externalId)','relationshipType, strengthOfRelationship','versions[].elements (crosswalk-element UUIDs)'],
+  db:['Crosswalk + CrosswalkElement','CrosswalkVersion (+ version elements)','Package (Crosswalk)','resource link segments'],
+  notes:['Both standards must be npm dependencies.','One unresolvable element aborts the whole load.'] },
+{ id:'compliance_feature', group:'compliance',
+  desc:'A capability a product or segment can offer toward compliance requirements.',
+  files:['index.yml','elements.yml'],
+  fields:['id, code (f_*), name','complianceFeatureTypes[] (must exist in type enum)','elements[]: {id} resolved against element/frameworkElement/benchmarkElement/control/testCase, or {standardAlias, elementAlias}','tags[], aliases[]'],
+  db:['Package (ComplianceFeature)','ComplianceFeature + ComplianceFeatureVersion','element links on the version','resource_tag'],
+  notes:['Emits base.ComplianceFeatureRescan.','Referenced BY product supports.yml and segment supports.yml.','All public elements.yml files are currently empty (elements: []).'] },
+{ id:'compliance_feature_type', group:'compliance',
+  desc:'Enum of compliance-feature type codes.',
+  files:['index.yml (complianceFeatureTypes[] of {code, description})'],
+  fields:['code (^[\\d_a-z]+$)'],
+  db:['Package (ComplianceFeatureType)','compliance feature type enum (upsert)'],
+  notes:['Deprecation is rejected for this type.'] },
+
+{ id:'schema', group:'integration',
+  desc:'AuditgraphDB class/link definitions — the data model everything lands in.',
+  files:['fields/*.yml','enums/*.yml','documents/*.yml','interfaces/*.yml','classes/*.yml','deprecated.yml'],
+  fields:['class properties: field ref or inline {type}','link properties: linkTo (class | [Class.prop,…]), multi, required, onDelete, resourceLinkType','interfaces: extends, viewProperties (jsonata), icon','zerobias.imports[] → other schema packages whose classes are extends/linkTo targets'],
+  db:['Package (Schema)','Schema','Field','DataType','EnumInfo','Class','Property','LinkType'],
+  notes:['Soft-deletes anything in the package not seen this run.','Missing zerobias.imports entry = classic load failure (per schema/CONTRIBUTING.md).','Product-specific schemas npm-depend on their product package.'] },
+{ id:'coretype', group:'integration',
+  desc:'Generated core field/type registry (CoreType/AmazonType/MicrosoftType/GoogleType) — no content files at all.',
+  files:['(none — generated from code registries)'],
+  fields:['—'],
+  db:['Package (Schema)','Schema','DataType (coreType: true)','Field (core.<name>)','EnumInfo','Property'],
+  notes:['Writes into the same tables as schema artifacts.'] },
+{ id:'module', group:'integration',
+  desc:'An OpenAPI-defined Hub integration: the API client that talks to a product.',
+  files:['<name>.yml (bundled OpenAPI; root, then dist/)','generated/api/manifest.json ({codegenVersion, operations})','connectionProfile.yml','runtimeConfig.yml (daemonMode, listenerPorts, durability…)','package.json (top-level moduleId)'],
+  fields:['moduleId (UUID, self-identity; referenced by collectorbot hub.yml)','info.x-product-infos[].$ref → product catalog.yml#/Product (≥1 required; first supplies imageUrl)','path-level x-product-operation(s)','connectionProfile x-oauth-providers[] → oauth provider (missing = error)','deps on *-interface-* modules: dataproducer → dataSupport, fileproducer → fileSupport'],
+  db:['package row (module)','Module (id = moduleId)','ModuleVersion (bundled API, operations, connection-profile ref, interface ids, runtime_config JSONB)','ModuleConnectionProfile (deduped by payload hash, UUIDv5)','ApiOperation rows ↔ catalog operations'],
+  notes:['$refs also reach into @zerobias-org/types-* packages.','Interface modules (interface: true in package.json) must already be loaded.'] },
+{ id:'collectorbot', group:'integration',
+  desc:'ETL: shapes a module’s output into AuditgraphDB schema classes.',
+  files:['hub.yml (modules{} + products{})','parameters.yml (OpenAPI stub: components.schemas.Parameters)','collector.yml (classes + batchModes)','REMEDIATION.md / USERGUIDE.md (optional)'],
+  fields:['hub.yml modules: npm name → {id: moduleId, name, version, operations, permissions}','hub.yml products: dotted code → {id} (validated via productDao)','collector.yml classes: schema artifact npm name → [ClassName,…] (shared classes rejected)','batchModes[] (default [Full])'],
+  db:['catalog.collector_bot (keyed by package AND version)','Package (Collectorbot)'],
+  notes:['Mapping logic is TypeScript code (Mappers.ts), not declarative files.','modules: {} is allowed for module-less collectors.'] },
+{ id:'pipeline', group:'integration',
+  desc:'Scheduled execution config: which collector runs against which product, how often.',
+  files:['pipeline/*.yml (one per pipeline)','deprecated.yml (tombstone list)'],
+  fields:['productId (UUID)','collectorArtifact (collectorbot npm name; must be in package imports; semver-resolved)','executionMode: caller|receiver','batchMode (must be supported by the collector)','frequency / dayOfWeek / executionTime / timezone','params {}'],
+  db:['Package (Pipeline, ops-org owned)','BoundaryProduct + Component (shared boundary)','Pipeline','Cron (type collector_bot) + AWS EventBridge schedule'],
+  notes:['Only type opted out of legacy name equivalence.','Skipped entirely in content-dev mode.'] },
+{ id:'oauth', group:'integration',
+  desc:'OAuth provider endpoint for a vendor/suite/product.',
+  files:['index.yml ({id, url})'],
+  fields:['the package code ITSELF resolves to a VSP (Vendor → Suite → Product, first match) → vspId'],
+  db:['Package (Oauth)','OAuthProvider (vspId)'],
+  notes:['Consumed by modules via connectionProfile x-oauth-providers[].','Linking is purely by package-code convention.'] },
+{ id:'sharedobject', group:'integration', hidden:true,
+  desc:'HIDDEN type (registerHidden): ships shared object instances for existing shared schema classes.',
+  files:['objects/<ClassName>/*.yml — dir name must be an existing shared schema Class'],
+  fields:['directory name → schema Class'],
+  db:['Package (Sharedobject)','import Batch + BatchItem (DynamoDB)','shared system pipeline job → Processing'],
+  notes:['Virtual: writes no artifact_version row; invisible to the Validator.'] },
+
+{ id:'query', group:'evidence',
+  desc:'Published GraphQL query over the auditgraph, parameterized and versioned.',
+  files:['index.yml'],
+  fields:['template (GraphQL — referenced classes resolved to classIds)','parameters[] / systemParameters[] {name, dataType (must exist), defaultValue}','elementIds[] → standard elements','evidenceDefinitionIds[]','status (must be published)','pagination, viewProperties, tags[]'],
+  db:['Package (Query)','GraphqlQuery','GraphqlQueryVersion (v5(version, queryId))','GraphqlQueryParameter','boundary query refresh per boundary'],
+  notes:[] },
+{ id:'evidencedefinition', group:'evidence',
+  desc:'Defines a piece of compliance evidence (what to collect, in what format) linked to SCF controls.',
+  files:['index.yml'],
+  fields:['id, code, name, status, category, format','controls[] (SCF control codes; * suffix = required)','domains[] (SCF domain codes)','tags[]'],
+  db:['catalog.evidence_definition','Package (Evidencedefinition)','SCF control/domain link rows','scfDomain.policyEvidenceDefinitionId','boundary resource links per boundary'],
+  notes:['Links only against SCF — i.e. the complianceforge.scf* framework packages.'] },
+{ id:'evidencebot', group:'evidence',
+  desc:'Automation that produces evidence by running a query against the graph.',
+  files:['index.yml'],
+  fields:['graphqlQueryVersionId (must exist)','evidenceDefinitionId (must exist)','elements[] {standardCode, elementCode}','tags[]'],
+  db:['catalog.evidence_bot','Package (Evidencebot)','boundary evidence regeneration if published'],
+  notes:[] },
+{ id:'evidencerequestlist', group:'evidence',
+  desc:'A named list of evidence requests against a specific framework version.',
+  files:['*.yml in package root (each = one list)'],
+  fields:['frameworkVersionId (UUID)','requests[]: requestCode, frameworkElement (code resolved against that version), frameworkSubElement?, evidenceDefinitionId(s)'],
+  db:['catalog.evidence_request_list','EvidenceRequest (keyed by requestCode)','EvidenceRequestListRequest join rows','Package (Evidencerequestlist)'],
+  notes:['Tag linking is present but commented out.'] },
+{ id:'alertbot', group:'evidence',
+  desc:'Alerting automation: watches a query result, transforms it, notifies roles.',
+  files:['index.yml','REMEDIATION.md'],
+  fields:['graphqlQueryVersionId → query','transformer','roles[] (catalog role codes)','elementIds[] → standard elements','tags[]'],
+  db:['Package (Alertbot)','AlertBotResource','AlertBotVersion (v5(version, botId))','boundary role-subscription sync'],
+  notes:[] },
+{ id:'alert_trigger', group:'evidence',
+  desc:'Event/cron-driven trigger templates that raise alerts.',
+  files:['trigger/*.yml','trigger/deprecated.yml'],
+  fields:['handler, ownerId','on[]: {event, op, cron?}','payload, links, remediation','roles[]'],
+  db:['Package (AlertTrigger)','trigger via loadTriggerFromTemplate (service platform-api)','alert subscriptions'],
+  notes:[] },
+
+{ id:'rbac', group:'org',
+  desc:'Built-in permission templates, org roles and service access rules.',
+  files:['permissions/*.yml ({version, permissions[]})','roles/*.yml ({id, name}; filename = code; RoleType.Org)','security/*.yml (accessRules per service)'],
+  fields:['accessRules: resourceTypes, permissions, cascade, conditions[] {name, type, payload|functionName|tagId}'],
+  db:['Package (Role)','permission templates','CatalogRole','security Role','access rules'],
+  notes:['Emits base.SyncBuiltInRoles.','Converges on CatalogRole with role / sop / workflow.'] },
+{ id:'role', group:'org',
+  desc:'Compliance work-role catalog: duties, qualifications, categories.',
+  files:['job_duties.yml','qualifications.yml (authoritative — missing codes deleted)','categories/*.yml','work_roles/*.yml','security/*.yml'],
+  fields:['work roles: jobDuties[], knowledge[], skills[], category, orgTypes[]','ids must equal uuidv5(code, Nil)'],
+  db:['JobDuty','Qualification','RoleCategory','CatalogRole + links','security Role','access rules'],
+  notes:['RoleType.Compliance.','role.scalable is coerced Boolean(dict) — known quirk, effectively always truthy when present.'] },
+{ id:'sop', group:'org',
+  desc:'Standard operating procedures: suggested activities per SCF control, assigned to roles.',
+  files:['roles.yml','controls/<SCF-CODE>.yml (filename = SCF control code, must already exist)'],
+  fields:['activities[] (strings)','roles[] (codes)'],
+  db:['SuggestedActivity (code <control>_<n>, id v5) + role links','Package (Sop)'],
+  notes:['Hard dependency on SCF framework content being loaded.'] },
+{ id:'workflow', group:'org',
+  desc:'Task workflow definitions: statuses, transitions, activities with RACI, triggers.',
+  files:['skill/','status/','field/','role/<orgType>/','workflow/','activity/','triggers/ (processed in that fixed order)'],
+  fields:['workflow: statuses, transitions (status codes)','activity: workflow code, RACI arrays (role codes), customFields, links {fromType|toType, linkType}, resourceLinks, onTransition','trigger: activityCode, selectors {eventType (change.*|base.*), service, operation}'],
+  db:['Skill','task statuses','CustomField','CatalogRole','Workflow + transitions','Activity','ActivityTrigger'],
+  notes:['Emits base.ResourceLinker.'] },
+{ id:'nav', group:'org',
+  desc:'Portal navigation tree (apps, folders, pages, sections) per UI version and org type.',
+  files:['extras/{contract_level,engagement_stage,organization_type}/*.yml','<ui_version>/{label,action,section,page,folder,app}/*.yml'],
+  fields:['cross-refs as "{type}/{code}" strings: organization_type/any, page/x, folder/x, permission/… (→ rbac permissions)'],
+  db:['portal template tables + per-org/per-boundary expansion','child_of resource links','refreshBoundaryNav()'],
+  notes:['Package-level deprecation throws.'] },
+{ id:'kb', group:'org',
+  desc:'Knowledge-base articles (Hugo content) linkable to any platform resource.',
+  files:['index.md / _index.md with YAML front-matter'],
+  fields:['code, title, kbType','application → portal app template code','keywords[]','relatesTo[] — resource UUIDs OR package codes → relates_to links to ANY artifact type; standard targets get standard.kbArticleId back-ref'],
+  db:['package (kb)','KbArticle','relates_to LinkType + links'],
+  notes:['Article URL is built from the environment dist-tag (CDN path).'] },
+{ id:'cron', group:'org',
+  desc:'Platform-level scheduled jobs.',
+  files:['crons/*.yml ({type, cron, enabled, data})'],
+  fields:['type (job type)','cron expression'],
+  db:['Package (Cron)','Cron rows keyed (NIL owner, type)','AWS EventBridge schedule'],
+  notes:['pipeline writes into the same Cron table (type collector_bot).','Package-level deprecation throws.'] },
+{ id:'dev_user', group:'org',
+  desc:'Developer seed users — hard-guarded to ENV_TYPE=dev only.',
+  files:['users/*.yml ({email, displayName, orgs[]: {orgId, admin}})'],
+  fields:['email → principal id = UUIDv5(email)'],
+  db:['hydra User principals','org joins'],
+  notes:[] },
+
+{ id:'bundle', group:'meta',
+  desc:'Pure aggregator: a package.json whose npm dependencies carry the real artifacts. The loader short-circuits it (NullModule).',
+  files:['package.json only'],
+  fields:['dependencies = pinned list of artifact packages (CI-refreshed)'],
+  db:['(nothing)'],
+  notes:['Every content repo ships a bundle/ package (e.g. @zerobias-org/vendor-bundle).'] },
+{ id:'vsp', group:'meta', stub:true,
+  desc:'LEGACY STUB — “We no longer handle old VSP artifacts.” Registered but writes nothing.',
+  files:['—'], fields:['—'], db:['(no-op)'], notes:['Superseded by separate vendor / suite / product types.'] },
+{ id:'policy', group:'meta', stub:true,
+  desc:'Registered but unimplemented no-op stub.',
+  files:['—'], fields:['—'], db:['(no-op)'], notes:[] },
+];
+
+// ---------------------------------------------------------------- edges
+// kind: ref = manifest field reference · dep = npm load-order dep ·
+//        db = DB-level coupling · family = loader specialization · tag = tags[]
+const EDGES = [
+ { s:'suite', t:'vendor', kind:'ref', label:'vendorId / vendorCode', detail:'suite index.yml carries vendorId (UUID, must exist) and vendorCode (must match). The vendor package is also an npm dependency so it loads first. Suite.parentId = vendorId.' },
+ { s:'product', t:'vendor', kind:'ref', label:'vendorId / vendorCode', detail:'product index.yml: vendorId + vendorCode, plus parentType: vendor when the product hangs directly off the vendor. npm dep mirrors it.' },
+ { s:'product', t:'suite', kind:'ref', label:'suiteId / suiteCode', detail:'When parentType: suite, product index.yml carries suiteId + suiteCode. npm dep mirrors it.' },
+ { s:'product', t:'segment', kind:'ref', label:'segments[] (UUIDs)', detail:'product index.yml lists segment UUIDs, e.g. "- 5310e110-… # CSPM".' },
+ { s:'product', t:'compliance_feature', kind:'ref', label:'supports.yml · features/*.yml', detail:'supports.yml: supports[] of {complianceFeature (id|code|packageCode), edition, status, strength, component} → ComplianceFeatureSupport rows. features/*.yml mints a child compliance_feature package.' },
+ { s:'segment', t:'segment_type', kind:'ref', label:'segmentType (code)', detail:'segment index.yml segmentType is resolved via segmentTypeDao.getByCode.' },
+ { s:'segment', t:'segment', kind:'ref', label:'parents[] (codes)', detail:'Self-referential hierarchy: parents[] lists parent segment codes (e.g. "- c_sg"), resolved to parentIds.' },
+ { s:'segment', t:'compliance_feature', kind:'ref', label:'supports.yml', detail:'supports[]: {complianceFeature: f_acm, status: supported, strength: high} → ComplianceFeatureSupport. Referenced feature packages are also npm deps.' },
+ { s:'segment', t:'vendor', kind:'dep', label:'npm dep', detail:'Segments depend on @auditlogic/vendor-zerobias (the zerobias vendor) for catalog anchoring.' },
+
+ { s:'framework', t:'standard', kind:'family', label:'standardType: framework', detail:'Framework is a standard-family loader: same index.yml/elements structure; mapped elements additionally become Controls. Framework.id = UUIDv5(standard.id, NIL).' },
+ { s:'benchmark', t:'standard', kind:'family', label:'standardType: benchmark', detail:'Benchmark is a standard-family loader: mapped elements become TestCases; TestSuite.id = UUIDv5(benchmark.id, NIL).' },
+ { s:'framework', t:'standard', kind:'ref', label:'overlayStandard + overlayElement', detail:'A framework element may overlay an element of another standard: overlayStandard (package code) + overlayElement (element code).' },
+ { s:'benchmark', t:'schema', kind:'ref', label:'subjectTypes[] = Class names', detail:'Each benchmark test-case subjectTypes entry must match an existing schema Class name — validated at load time.' },
+ { s:'standard', t:'suite', kind:'dep', label:'publisher suite npm dep', detail:'standard/framework/benchmark packages npm-depend on their publisher suite (e.g. @zerobias-org/suite-nist-800-53) to anchor in the VSP catalog.' },
+ { s:'framework', t:'suite', kind:'dep', label:'publisher suite npm dep', detail:'e.g. @zerobias-org/framework-nist-800-53-v5 depends on @zerobias-org/suite-nist-800-53.' },
+ { s:'benchmark', t:'suite', kind:'dep', label:'publisher suite npm dep', detail:'Benchmarks depend on the suite of the technology they test.' },
+ { s:'crosswalk', t:'framework', kind:'ref', label:'sourceStandard / targetStandard + element aliases', detail:'index.yml sourceStandard/targetStandard hold dotted package codes (e.g. nist.800218.v1_1.framework) resolved via standardDao.getByPackage; elements.yml maps sourceElement/targetElement by alias or externalId with relationshipType + strengthOfRelationship. Both packages must be npm deps.' },
+ { s:'crosswalk', t:'standard', kind:'ref', label:'sourceStandard / targetStandard', detail:'Crosswalks can also target plain standards — same resolution path (standardDao.getByPackage).' },
+ { s:'compliance_feature', t:'compliance_feature_type', kind:'ref', label:'complianceFeatureTypes[]', detail:'Each entry must exist in the compliance-feature-type enum loaded by a compliance_feature_type artifact.' },
+ { s:'compliance_feature', t:'standard', kind:'ref', label:'elements.yml ({standardAlias, elementAlias} | id)', detail:'elements[] entries resolve against element / frameworkElement / benchmarkElement / control / testCase — by bare UUID id or by {standardAlias, elementAlias} pair.' },
+ { s:'compliance_feature', t:'framework', kind:'ref', label:'elements.yml (control ids)', detail:'Same elements.yml mechanism — ids may resolve to framework elements / controls.' },
+ { s:'compliance_feature', t:'benchmark', kind:'ref', label:'elements.yml (test-case ids)', detail:'Same elements.yml mechanism — ids may resolve to benchmark elements / test cases.' },
+
+ { s:'schema', t:'schema', kind:'ref', label:'zerobias.imports[] · extends / linkTo', detail:'zerobias.imports lists dotted identities of other schema packages whose classes may be extends/linkTo targets. Class link properties: linkTo (Class | [Class.prop,…]), multi, required, onDelete, resourceLinkType.' },
+ { s:'schema', t:'product', kind:'dep', label:'npm dep (product schemas)', detail:'Product-specific schema packages npm-depend on their product package (e.g. schema-…-agentskills → product-zerobias-schemas-agentskills).' },
+ { s:'coretype', t:'schema', kind:'db', label:'writes core Field/DataType rows', detail:'coretype is generated from code registries (CoreType/AmazonType/MicrosoftType/GoogleType) and writes into the same Schema/DataType/Field/EnumInfo tables schema artifacts use, providing the core.* fields they build on.' },
+ { s:'module', t:'product', kind:'ref', label:'x-product-infos $ref → catalog.yml#/Product', detail:'api.yml info.x-product-infos[].$ref points into the product package: ./node_modules/@zerobias-org/product-…/catalog.yml#/Product. Zero products = load error; first product supplies the image. Path-level x-product-operation(s) bind operations to catalog Operations.' },
+ { s:'module', t:'oauth', kind:'ref', label:'connectionProfile x-oauth-providers[]', detail:'A module connection profile may declare x-oauth-providers; each is resolved via oauthProviderDao.getByPackage — missing provider = load error.' },
+ { s:'module', t:'module', kind:'ref', label:'*-interface-* deps', detail:'Dependencies on interface modules are scanned: dataproducer → dataSupport, fileproducer → fileSupport. Interface modules must already be loaded; their ids are recorded on ModuleVersion.' },
+ { s:'oauth', t:'vendor', kind:'ref', label:'package code → VSP (vspId)', detail:'The oauth package code itself is resolved to a Vendor → Suite → Product (first match) via productDao.getVSPPackageCodeFromPackage; OAuthProvider.vspId stores the result. Pure naming convention — no explicit field.' },
+ { s:'collectorbot', t:'module', kind:'ref', label:'hub.yml modules{}', detail:'hub.yml modules is a map keyed by module npm name → {id: moduleId UUID, name, version, operations, permissions}. modules: {} is allowed (module-less collectors).' },
+ { s:'collectorbot', t:'product', kind:'ref', label:'hub.yml products{}', detail:'hub.yml products is keyed by dotted product code → {id: product UUID}, validated via productDao.get.' },
+ { s:'collectorbot', t:'schema', kind:'ref', label:'collector.yml classes{}', detail:'collector.yml classes maps schema artifact npm name → [ClassName,…] the collector populates, resolved via classDao.getInfoByName. Shared classes are rejected.' },
+ { s:'pipeline', t:'product', kind:'ref', label:'productId (UUID)', detail:'Each pipeline/*.yml carries productId — the product the collector runs against.' },
+ { s:'pipeline', t:'collectorbot', kind:'ref', label:'collectorArtifact (npm name)', detail:'collectorArtifact names the collectorbot npm package (must be in the package imports; semver-resolved to a collector_bot artifact version). batchMode must be supported by that collector.' },
+ { s:'pipeline', t:'cron', kind:'db', label:'writes Cron rows (collector_bot)', detail:'The pipeline loader writes Cron rows (type collector_bot) + AWS EventBridge schedules into the same table the cron artifact owns.' },
+ { s:'sharedobject', t:'schema', kind:'ref', label:'objects/<ClassName>/ dirs', detail:'Each objects/ subdirectory name must be an existing SHARED schema Class; instances are imported via DynamoDB Batch/BatchItem and the shared system pipeline.' },
+ { s:'catalog_overview', t:'schema', kind:'ref', label:'rows[].className', detail:'Overview rows can count by schema className (or resourceType / raw countQuery SQL).' },
+
+ { s:'query', t:'schema', kind:'ref', label:'template classes → classIds', detail:'The GraphQL template is parsed; referenced classes are resolved to classIds. Parameter dataTypes must exist (dataTypeDao).' },
+ { s:'query', t:'standard', kind:'ref', label:'elementIds[]', detail:'Optional links from a query to standard elements.' },
+ { s:'query', t:'evidencedefinition', kind:'ref', label:'evidenceDefinitionIds[]', detail:'Optional links from a query to evidence definitions.' },
+ { s:'evidencedefinition', t:'framework', kind:'ref', label:'controls[] / domains[] (SCF codes)', detail:'controls[] holds SCF control codes (* suffix = required), domains[] SCF domain codes — these resolve against the ScfControl/ScfDomain tables populated only by complianceforge.scf* framework packages.' },
+ { s:'evidencebot', t:'query', kind:'ref', label:'graphqlQueryVersionId', detail:'Must reference an existing query version.' },
+ { s:'evidencebot', t:'evidencedefinition', kind:'ref', label:'evidenceDefinitionId', detail:'Must reference an existing evidence definition.' },
+ { s:'evidencebot', t:'standard', kind:'ref', label:'elements[] {standardCode, elementCode}', detail:'Optional element links by standard + element code pair.' },
+ { s:'evidencerequestlist', t:'framework', kind:'ref', label:'frameworkVersionId + element codes', detail:'Each list targets a framework version (UUID); each request resolves frameworkElement (and optional frameworkSubElement) codes against that version.' },
+ { s:'evidencerequestlist', t:'evidencedefinition', kind:'ref', label:'evidenceDefinitionId(s)', detail:'Each request points at one or more evidence definitions.' },
+ { s:'alertbot', t:'query', kind:'ref', label:'graphqlQueryVersionId', detail:'The alert bot watches a query version.' },
+ { s:'alertbot', t:'role', kind:'ref', label:'roles[] (catalog role codes)', detail:'Alert notifications target catalog roles; boundary role subscriptions are synced.' },
+ { s:'alertbot', t:'standard', kind:'ref', label:'elementIds[]', detail:'Optional links to standard elements.' },
+ { s:'alert_trigger', t:'role', kind:'ref', label:'roles[]', detail:'Trigger templates reference catalog role codes.' },
+
+ { s:'sop', t:'framework', kind:'ref', label:'controls/<SCF-CODE>.yml filenames', detail:'Each controls/ file is named after an SCF control code that must already exist (SCF framework loaded first).' },
+ { s:'sop', t:'role', kind:'ref', label:'roles[] codes', detail:'Activities are assigned to roles by code (roles.yml + per-control roles[]).' },
+ { s:'workflow', t:'role', kind:'ref', label:'RACI role codes', detail:'Activity RACI arrays reference role codes; workflow also creates/links CatalogRole rows for role/<orgType>/ definitions.' },
+ { s:'nav', t:'rbac', kind:'ref', label:'permission/* refs', detail:'Nav items cross-reference as "{type}/{code}" strings, including permission/… entries that resolve to rbac permissions.' },
+ { s:'kb', t:'standard', kind:'ref', label:'relatesTo[] (→ any resource)', detail:'kb front-matter relatesTo[] holds resource UUIDs OR package codes and creates relates_to links to ANY artifact type; standard targets additionally get standard.kbArticleId back-filled. (Edge drawn to standard as the concrete back-ref case.)' },
+ { s:'rbac', t:'role', kind:'db', label:'converge on CatalogRole', detail:'rbac, role, sop and workflow all write/link CatalogRole rows via the same roleDao.loadFromTemplate path.' },
+ { s:'segment', t:'product', kind:'db', label:'shared Offering + ComplianceFeatureSupport', detail:'Both loaders write Offering rows and ComplianceFeatureSupport rows — the product/segment support matrices live in the same tables.' },
+
+ // tag edges (toggle, off by default)
+ { s:'vendor', t:'tag', kind:'tag', label:'tags[]', detail:'tags[] of UUIDs → resource_tag rows.' },
+ { s:'suite', t:'tag', kind:'tag', label:'tags[]', detail:'tags[] of UUIDs → resource_tag rows.' },
+ { s:'product', t:'tag', kind:'tag', label:'tags[]', detail:'tags[] of UUIDs → resource_tag rows.' },
+ { s:'segment', t:'tag', kind:'tag', label:'tags[]', detail:'tags[] of UUIDs → resource_tag rows.' },
+ { s:'compliance_feature', t:'tag', kind:'tag', label:'tags[]', detail:'tags[] of UUIDs → resource_tag rows.' },
+ { s:'query', t:'tag', kind:'tag', label:'tags[]', detail:'tags[] of UUIDs → resource_tag rows.' },
+ { s:'evidencedefinition', t:'tag', kind:'tag', label:'tags[]', detail:'tags[] of UUIDs → resource_tag rows.' },
+ { s:'evidencebot', t:'tag', kind:'tag', label:'tags[]', detail:'tags[] of UUIDs → resource_tag rows.' },
+ { s:'alertbot', t:'tag', kind:'tag', label:'tags[]', detail:'tags[] of UUIDs → resource_tag rows.' },
+ { s:'vendor', t:'tag', kind:'tag', label:'(cpe)', detail:'' },
+];
+// drop the accidental duplicate vendor→tag helper edge
+EDGES.splice(EDGES.length - 1, 1);
+
+// ---------------------------------------------------------------- layout (preset clusters)
+const CLUSTERS = {
+  catalog:     { x: 230,  y: 240,  cols: 3 },
+  compliance:  { x: 270,  y: 760,  cols: 3 },
+  integration: { x: 820,  y: 520,  cols: 3 },
+  evidence:    { x: 1370, y: 240,  cols: 3 },
+  org:         { x: 1390, y: 760,  cols: 3 },
+  meta:        { x: 820,  y: 1010, cols: 3 },
+};
+const SPACING = { x: 165, y: 95 };
+const positions = {};
+const counters = {};
+for (const n of NODES) {
+  const c = CLUSTERS[n.group];
+  const i = counters[n.group] = (counters[n.group] ?? -1) + 1;
+  positions[n.id] = {
+    x: c.x + (i % c.cols) * SPACING.x - ((c.cols - 1) * SPACING.x) / 2,
+    y: c.y + Math.floor(i / c.cols) * SPACING.y,
+  };
+}
+
+// ---------------------------------------------------------------- cytoscape
+const EDGE_COLORS = { ref:'#94a3b8', dep:'#94a3b8', db:'#f43f5e', family:'#fbbf24', tag:'#7dd3fc' };
+const cy = cytoscape({
+  container: document.getElementById('cy'),
+  elements: [
+    ...NODES.map(n => ({ data: { id: n.id, label: n.id, group: n.group, stub: !!n.stub }, position: positions[n.id] })),
+    ...EDGES.map((e, i) => ({ data: { id: 'e' + i, source: e.s, target: e.t, kind: e.kind, label: e.label, detail: e.detail } })),
+  ],
+  layout: { name: 'preset' },
+  wheelSensitivity: 0.25,
+  style: [
+    { selector: 'node', style: {
+        'label': 'data(label)', 'color': '#e2e8f0', 'font-size': 12, 'font-weight': 600,
+        'text-valign': 'center', 'text-halign': 'center',
+        'background-color': ele => GROUPS[ele.data('group')].color,
+        'background-opacity': ele => ele.data('stub') ? 0.35 : 0.92,
+        'border-width': 1.5, 'border-color': '#0f172a',
+        'shape': 'round-rectangle', 'width': 'label', 'height': 30, 'padding': '9px',
+        'text-outline-width': 2, 'text-outline-color': '#0f172a', 'text-outline-opacity': .6,
+    }},
+    { selector: 'node[?stub]', style: { 'border-style': 'dashed', 'border-color': '#94a3b8' } },
+    { selector: 'edge', style: {
+        'width': 1.6, 'curve-style': 'bezier',
+        'line-color': ele => EDGE_COLORS[ele.data('kind')],
+        'target-arrow-color': ele => EDGE_COLORS[ele.data('kind')],
+        'target-arrow-shape': 'triangle', 'arrow-scale': 0.9, 'opacity': 0.7,
+        'line-style': ele => ele.data('kind') === 'dep' ? 'dashed' : ele.data('kind') === 'db' ? 'dotted' : 'solid',
+        'label': '', 'font-size': 10, 'color': '#cbd5e1',
+        'text-background-color': '#0f172a', 'text-background-opacity': .85, 'text-background-padding': 2,
+    }},
+    { selector: 'edge.showlabel', style: { 'label': 'data(label)', 'opacity': 1, 'width': 2.6, 'z-index': 9 } },
+    { selector: '.faded', style: { 'opacity': 0.12 } },
+    { selector: 'node.hl', style: { 'border-width': 3, 'border-color': '#38bdf8' } },
+    { selector: '.hidden-kind', style: { 'display': 'none' } },
+  ],
+});
+cy.fit(undefined, 60);
+
+// ---------------------------------------------------------------- toggles
+const KIND_TOGGLES = { ref:'t-ref', dep:'t-dep', db:'t-db', family:'t-family', tag:'t-tag' };
+function applyToggles() {
+  for (const [kind, elId] of Object.entries(KIND_TOGGLES)) {
+    const on = document.getElementById(elId).checked;
+    cy.edges(`[kind = "${kind}"]`)[on ? 'removeClass' : 'addClass']('hidden-kind');
+  }
+}
+Object.values(KIND_TOGGLES).forEach(id => document.getElementById(id).addEventListener('change', applyToggles));
+applyToggles();
+
+// ---------------------------------------------------------------- sidebar
+const sidebar = document.getElementById('sidebar');
+const DEFAULT_SIDEBAR = sidebar.innerHTML;
+const esc = s => s; // content is authored, allow inline tags
+
+function showNode(id) {
+  const n = NODES.find(n => n.id === id);
+  const g = GROUPS[n.group];
+  const out = EDGES.filter(e => e.s === id);
+  const inc = EDGES.filter(e => e.t === id);
+  const li = arr => arr.length ? '<ul>' + arr.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>' : '<p class="muted">—</p>';
+  const linkRows = (arr, dir) => arr.length ? arr.map(e => {
+    const other = dir === 'out' ? e.t : e.s;
+    const arrow = dir === 'out' ? '→' : '←';
+    return `<div class="linkrow" onclick="focusNode('${other}')"><b>${arrow} ${other}</b> <span class="pill">${e.kind}</span><span class="via">${esc(e.label)}</span></div>`;
+  }).join('') : '<p class="muted">none</p>';
+  sidebar.innerHTML = `
+    <h2>${n.id} <span class="badge" style="background:${g.color}">${g.name}</span>${n.hidden ? ' <span class="badge" style="background:#64748b">hidden</span>' : ''}${n.stub ? ' <span class="badge" style="background:#64748b">stub</span>' : ''}</h2>
+    <p>${esc(n.desc)}</p>
+    <h3>Files the loader reads</h3>${li(n.files.map(f => `<code>${f}</code>`))}
+    <h3>Key / linking fields</h3>${li(n.fields)}
+    <h3>Outgoing links (${out.length})</h3>${linkRows(out, 'out')}
+    <h3>Incoming links (${inc.length})</h3>${linkRows(inc, 'in')}
+    <h3>DB write targets <span class="muted" style="text-transform:none;letter-spacing:0">(discovery level)</span></h3>${li(n.db)}
+    ${n.notes.length ? '<h3>Notes</h3>' + li(n.notes) : ''}
+    <p class="hint" style="margin-top:14px">Loader: <code>dataloader/src/processors/…</code> in zerobias-com/platform · key <code>import-artifact: "${n.id}"</code></p>
+    <p><button onclick="resetSidebar()">← Back to overview</button></p>`;
+  sidebar.scrollTop = 0;
+}
+
+function showEdge(eid) {
+  const e = cy.getElementById(eid).data();
+  sidebar.innerHTML = `
+    <h2>${e.source} → ${e.target}</h2>
+    <p><span class="pill">${e.kind}</span> <b>${esc(e.label)}</b></p>
+    <p>${esc(e.detail || '')}</p>
+    <div class="linkrow" onclick="focusNode('${e.source}')"><b>${e.source}</b><span class="via">source</span></div>
+    <div class="linkrow" onclick="focusNode('${e.target}')"><b>${e.target}</b><span class="via">target</span></div>
+    <p><button onclick="resetSidebar()">← Back to overview</button></p>`;
+  sidebar.scrollTop = 0;
+}
+
+window.resetSidebar = () => { sidebar.innerHTML = DEFAULT_SIDEBAR; clearHighlight(); };
+window.focusNode = (id) => { const n = cy.getElementById(id); cy.animate({ center: { eles: n }, duration: 250 }); n.emit('tap'); };
+
+// ---------------------------------------------------------------- interaction
+function clearHighlight() {
+  cy.elements().removeClass('faded hl');
+  cy.edges().removeClass('showlabel');
+}
+cy.on('tap', 'node', evt => {
+  const n = evt.target;
+  clearHighlight();
+  const hood = n.closedNeighborhood();
+  cy.elements().not(hood).addClass('faded');
+  n.addClass('hl');
+  n.connectedEdges().not('.hidden-kind').addClass('showlabel');
+  showNode(n.id());
+});
+cy.on('tap', 'edge', evt => {
+  const e = evt.target;
+  clearHighlight();
+  cy.elements().not(e.connectedNodes().union(e)).addClass('faded');
+  e.addClass('showlabel');
+  showEdge(e.id());
+});
+cy.on('tap', evt => { if (evt.target === cy) resetSidebar(); });
+
+document.getElementById('search').addEventListener('input', ev => {
+  const q = ev.target.value.trim().toLowerCase();
+  clearHighlight();
+  if (!q) return;
+  const hits = cy.nodes().filter(n => n.id().includes(q));
+  if (hits.length) { cy.elements().not(hits).addClass('faded'); hits.addClass('hl'); }
+});
+document.getElementById('search').addEventListener('keydown', ev => {
+  if (ev.key === 'Enter') {
+    const q = ev.target.value.trim().toLowerCase();
+    const hit = cy.nodes().filter(n => n.id().includes(q))[0];
+    if (hit) window.focusNode(hit.id());
+  }
+});
+
+document.getElementById('btn-fit').onclick = () => cy.fit(undefined, 60);
+document.getElementById('btn-layout').onclick = () => {
+  cy.nodes().forEach(n => n.position(positions[n.id()]));
+  cy.fit(undefined, 60);
+};
+document.getElementById('btn-mech').onclick = () => document.getElementById('modal').style.display = 'flex';
+document.getElementById('modal').addEventListener('click', ev => { if (ev.target.id === 'modal') ev.target.style.display = 'none'; });
+</script>
+</body>
+</html>
