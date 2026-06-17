@@ -84,13 +84,23 @@ Before doing anything substantive, orient yourself:
      standard it cites (`standard/`), or a crosswalk to another
      framework (`crosswalk/`).
 
-5. **Did the user ask to add / create / wire up a connector,
-   collector, or data source for some vendor or product?** Use the
-   [`/create-connector`](.claude/skills/create-connector/SKILL.md) skill —
-   it orchestrates the full vendor → suite? → product → module →
-   collectorbot chain via per-phase sub-agents (to keep context small),
-   discovers existing state via the `zb` MCP, and targets a schema
-   interface as a placeholder while concrete schema work is deferred.
+5. **Did the user ask to add a product / vendor / compliance content,
+   or wire up a full data integration?** Two skills, pick by scope:
+   - **Catalog content only** (add a product + its vendor / suite? /
+     segments / components / editions / compliance features / control
+     links — **no** module, **no** collectorbot): use
+     [`/create-product`](.claude/skills/create-product/SKILL.md). It
+     researches the vendor's taxonomy, decides suite-vs-no-suite,
+     **checks whether the product already exists and asks what to do**
+     (update / add missing deps / nothing), and authors content-as-code
+     validated by the gradle gate. This is what most catalog requests want.
+   - **Full data integration** (catalog **+** Hub module **+**
+     collectorbot, interface-targeted schema): use
+     [`/create-connector`](.claude/skills/create-connector/SKILL.md). It
+     **delegates Part 1 to `/create-product`**, then adds the module and
+     collectorbot via per-phase sub-agents / handoffs.
+   - Underlying model for both:
+     [`.claude/docs/catalog-content-model.md`](.claude/docs/catalog-content-model.md).
 
 ---
 
@@ -365,3 +375,9 @@ they consult their internal docs.
   [`.claude/docs/dataloader-artifact-map.md`](.claude/docs/dataloader-artifact-map.md)
   — every loadable artifact type, its manifest files and linking fields;
   interactive diagram at [`artifact-map/index.html`](artifact-map/index.html)
+- **Catalog content model (enums, validation, feature wiring):**
+  [`.claude/docs/catalog-content-model.md`](.claude/docs/catalog-content-model.md)
+  — how vendor / product / segment / compliance_feature content is structured,
+  validated (the gradle gate, **not** `npm run validate`), and wired
+  (product → `segments` → segment `supports.yml` → `complianceFeature`). Read
+  before authoring or reviewing any catalog PR by hand.
