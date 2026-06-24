@@ -1,6 +1,6 @@
 # Quickstart
 
-Get productive in the `zerobias-org` meta-repo in ~10 minutes. For depth,
+Get productive in the `zerobias` meta-repo in ~10 minutes. For depth,
 [`README.md`](README.md) is the canonical reference; this page is the
 fastest path to actually doing something.
 
@@ -21,8 +21,8 @@ fastest path to actually doing something.
 ## Bootstrap
 
 ```bash
-git clone https://github.com/zerobias-org/zerobias-org.git
-cd zerobias-org
+git clone https://github.com/zerobias-org/zerobias.git
+cd zerobias
 ./scripts/clone-all.sh                  # clones every public sub-repo
 claude                                  # open Claude Code here
 ```

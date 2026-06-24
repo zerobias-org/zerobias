@@ -44,8 +44,8 @@ own. The meta-repo is useful when you want to:
 
 ```bash
 # 1. Clone this meta-repo
-git clone https://github.com/zerobias-org/zerobias-org.git
-cd zerobias-org
+git clone https://github.com/zerobias-org/zerobias.git
+cd zerobias
 
 # 2. Bootstrap every public zerobias-org repo into this working tree
 ./scripts/clone-all.sh
@@ -283,7 +283,7 @@ context** so they can answer questions, suggest implementations, and edit
 across multiple repositories coherently.
 
 ```bash
-cd zerobias-org          # start the agent from the meta-repo root
+cd zerobias              # start the agent from the meta-repo root
 claude                   # or the agent of your choice
 ```
 
