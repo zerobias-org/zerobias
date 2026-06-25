@@ -136,6 +136,11 @@ Skip layers that already exist; do only what Phase 1/1.5 selected. One
   candidates deliberately omitted, deferred control mappings. A clean diff hides
   uncertainty. (The `git` skill handles mechanics only — YOU own composing the
   PR body + §9 surface.)
+- **Load into your OWN org without a PR (for testing/iteration):** `publishOrg` publishes an
+  org-private artifact and the dev dataloader loads it straight into your org — full recipe
+  (the `zbb.yaml` env block + the re-load-via-`POST /dataloader/jobs` fast path + catalog
+  verification) in the dossier **§11**. PRs to `dev` remain how content reaches the *shared*
+  catalog.
 
 ## Reference (don't restate — link)
 Enums, NO-suite rule + safety, the feature-wiring chain, MCP op corrections, and PR

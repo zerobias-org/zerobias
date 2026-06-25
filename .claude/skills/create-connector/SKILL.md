@@ -86,6 +86,9 @@ research → discovery → suite decision → scaffolding the whole catalog chai
 features → segment `supports.yml` → control links), validation via the gradle
 gate, the dossier, the brief, and the PR §9 SME-review surface.
 
+> **Test-load to your own org (no PR):** to load the product into your org while iterating,
+> see `/create-product`'s dossier **§11** — the `publishOrg` recipe.
+
 Crucially, `/create-product` **checks whether the product already exists and asks
 what to do**:
 

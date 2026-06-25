@@ -188,3 +188,58 @@ Research it here for the module handoff; don't expect it in `product/index.yml`.
   `NEON_API_KEY` — the zbb.yaml/task comments are stale). The stamp can't be hand-faked,
   and the API shortcut can't produce it — gate locally. CI runs the real Neon dataloader
   with valid creds, so the content is still validated there.
+
+## 11. Load mechanics: dependency order + `publishOrg` (org-direct, no PR)
+- **Artifacts load dependencies child-before-parent.** The dataloader `npm install`s the
+  artifact's `@zerobias-org/*` deps and loads them in order (vendor → suite? → product),
+  resolving each from the **registry** via its package.json range (vendor pinned `latest`).
+  A product load pulls + loads its vendor automatically — you do NOT pre-load the chain.
+  (Confirmed: a wiz product load auto-installed `vendor-wiz@1.0.0` before the product.)
+- **`publishOrg`** (zbb gradle task, content repos) loads straight to your org, bypassing
+  the PR + dev version-gate: gate → `npm publish` org-private `<semver>-rc.<orgIdStripped>.<n>`
+  → POST a dataloader job to your org. Publishes **only the leaf package** (no chain handling
+  — the dataloader resolves deps from the registry). Conditions: `ZB_TOKEN` = **admin token
+  of the target org** (a different-org token fails the `/dana/me` check); package.json
+  `zerobias.orgId` = target org UUID; **plain-semver** pkg version; **brand-new / org-owned
+  name only** (rejects shared-catalog names like the github product / `f_*` features).
+- ⚠️ **Load authz (org users):** you can only queue **org-private** (`-rc.<org>`) dataloader
+  jobs; a catalog-version load (plain semver, e.g. `vendor-wiz@1.0.0`) is **403 Forbidden**
+  (`JobProducerImpl.queueJob`). So `publishOrg` of a new org-owned artifact is the ONLY
+  user-accessible load path — you cannot load shared-catalog content into your org yourself
+  (that needs a platform admin).
+- **Required run env** — put these where zbb reads its env: the **slot/stack `env:`** (a plain
+  shell `export` does NOT reach the build). Keep the secret in the slot's *local* env
+  (`zbb --slot <s> env set ZB_TOKEN …` — not a committed file); the non-secret URLs/tag can live
+  in the stack's `zbb.yaml` `env:`:
+  - `ZB_TOKEN` — org-admin token of the target org (mask it in logs).
+  - `ZB_PLATFORM_URL: https://<env>/api` — publishOrg uses it for BOTH `/dana/me` and
+    `/dataloader/jobs` (default is prod `app.zerobias.com/api`).
+  - `DATALOADER_SERVICE_URL: https://<env>/api/dataloader` — a **separate** var the gate's
+    `dataloaderExec` (NeonDataloaderTask) reads; it does NOT honor `ZB_PLATFORM_URL`, so if you
+    set only ZB_PLATFORM_URL the gate hits prod and 401s. Set both.
+  - `NPM_CONFIG_TAG: dev` — npm 11 requires a dist-tag for prereleases; set it via env (no code
+    edit) so the `-rc.<org>` publish is accepted/tagged. (`ENV_TYPE: dev` only drives dependency
+    dist-tag resolution, not the publish tag.)
+  - `PUBLISH_ORG_REGISTRY_URL: https://pkg.zerobias.org` (org-private registry; this is the default).
+- **Composite build:** the gate compiles `build-tools` from source via
+  `includeBuild("../util/packages/build-tools")`, so the run dir MUST sit **beside** the `util`
+  clone (a `/tmp` worktree breaks the relative path → silently falls back to the published
+  plugin). The gate's local Neon load uses the `@zerobias-com/platform-dataloader` global — keep
+  it current (`npm i -g @zerobias-com/platform-dataloader@latest`).
+- **Re-load without re-publishing (fast path):** once an org-private artifact is published, you
+  can (re)load it any time by POSTing the dataloader job directly — no gate, no re-publish:
+  `POST https://<env>/api/dataloader/jobs` with body
+  `{"artifactName":"<pkg>","artifactVersion":"<semver>-rc.<orgIdStripped>.<n>"}` and headers
+  `Authorization: APIKey <ZB_TOKEN>` + `dana-org-id: <orgUUID>`; poll
+  `GET …/dataloader/jobs/<id>` until `completed` (a full org-owned product — vendor + ~dozens of
+  components/editions — loads in ~10s). Confirm it landed:
+  `GET …/api/store/products/<vendorCode>.<productCode>` (by package **code**, e.g. `wiz.wiz`,
+  NOT the UUID) → returns the org-owned product + `…/versions`.
+- **Promote to the shared catalog (PR to `dev`):** the ONLY change is to **delete
+  `zerobias.orgId` from package.json** — that flips the artifact owner from your org to NilUUID
+  (= shared catalog; owner is `effectiveOwnerId = zerobias.orgId ?? NilUUID`). **No re-gate
+  needed:** for content packages `package.json` is NOT part of the gate-stamp `sourceHash` (it
+  hashes the `files` payload — `index.yml`/`catalog.yml`/`logo.*`), so adding the orgId (to load
+  to your org) then removing it (for the PR) leaves the stamp valid. Don't hand-edit `version`
+  (CI/Lerna owns it). Commit the content + the existing `gate-stamp.json`, PR against `dev`; the
+  leftover `-rc.<org>.<n>` org-private npm versions don't collide with the catalog semver.
