@@ -40,7 +40,37 @@ own. The meta-repo is useful when you want to:
 
 ---
 
+## Docker Container
+
+If you wish to run the ZeroBias tools in a Docker container, consider using the  [AuditCrowd Sandbox](https://github.com/auditcrowd/sandbox).
+
 ## Quick start
+
+### Prerequisites
+
+#### Access 
+
+- GitHub Personal Access Token (PAT)
+  - Create [New (Classic) PAT](https://github.com/settings/tokens/new) (read:packages)
+  - Assign to environment variable `NPM_TOKEN` (or `READ_TOKEN`)
+- Access to the ZeroBias Platform
+  - [Request free access](https://auditmation2.wpengine.com/auditmation/access-request/)
+- ZeroBias Platform Org ID and API Key
+  - [Login to ZeroBias](https://app.zerobias.com)
+  - Click profile avatar (upper right)
+  - Click "Create New API Key"
+  - Note Organization ID and API Key (Keep these secure)
+
+**NOTE**: See special notes if you wish to run the ZeroBias tools in a [sandbox](./docs/Sandbox.md)
+
+#### Technical
+
+- Java >=21
+- Node latest 
+- Claude Code CLI latest
+- Ensure Python 3.12
+- Docker
+
 
 ```bash
 # 1. Clone this meta-repo
