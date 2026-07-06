@@ -40,36 +40,49 @@ own. The meta-repo is useful when you want to:
 
 ---
 
-## Docker Container
-
-If you wish to run the ZeroBias tools in a Docker container, consider using the  [AuditCrowd Sandbox](https://github.com/auditcrowd/sandbox).
-
 ## Quick start
 
-### Prerequisites
+## What you need
 
-#### Access 
 
-- GitHub Personal Access Token (PAT)
-  - Create [New (Classic) PAT](https://github.com/settings/tokens/new) (read:packages)
-  - Assign to environment variable `NPM_TOKEN` (or `READ_TOKEN`)
-- Access to the ZeroBias Platform
-  - [Request free access](https://auditmation2.wpengine.com/auditmation/access-request/)
-- ZeroBias Platform Org ID and API Key
+### Accounts
+
+- **ZeroBias** at [`app.zerobias.com`](https://app.zerobias.com)
+  if you want the live platform integrations below (MCPs, private NPM,
+  `zb` CLI). External readers can browse all source without an account.
+- **GitHub** at [`github.com`](https://github.com)
+
+### Access Tokens
+
+- **ZeroBias Platform Org ID and API Key**
   - [Login to ZeroBias](https://app.zerobias.com)
   - Click profile avatar (upper right)
   - Click "Create New API Key"
   - Note Organization ID and API Key (Keep these secure)
+- **GitHub Personal Access Token (PAT)**
+  - Create [New (Classic) PAT](https://github.com/settings/tokens/new) (read:packages)
+  - Assign to environment variable `NPM_TOKEN` (or `READ_TOKEN`)
 
-**NOTE**: See special notes if you wish to run the ZeroBias tools in a [sandbox](./docs/Sandbox.md)
+### Workstation Tools
 
-#### Technical
+Ensure the following tools are present on your workstation:
 
-- Java >=21
-- Node latest 
-- Claude Code CLI latest
-- Ensure Python 3.12
-- Docker
+- **git [>= 2.34]**
+- **Java [>= 21.0]**
+- **Node [>= 22.20.0]**
+- **Python [>= 3.12]**
+- **Docker [>= 29.6.1]**
+- [**Claude Code [>= 2.0]**](https://claude.com/claude-code)
+
+
+This meta-repo is designed to be driven by an agent — one working tree
+  spanning every public `zerobias-org` repo so the agent can read,
+  search, and reason across them at once. Everything works without
+  Claude Code, but most of the leverage is gone. 
+
+### Docker Container
+
+If you wish to run the ZeroBias tools in a Docker container, review [sandbox](./docs/Sandbox.md).
 
 
 ```bash
@@ -98,6 +111,9 @@ so no GitHub-API lookup or `gh` CLI is needed at clone time.
 Maintainers refresh that list when the org adds a new repo via
 `scripts/refresh-repos-list.sh` (which does use `gh`).
 
+## Docker Container
+
+If you wish to run the ZeroBias tools in a Docker container, review [sandbox](./docs/Sandbox.md).
 
 ---
 

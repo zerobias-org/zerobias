@@ -2,9 +2,6 @@
 
 The ZeroBias tools need to be able to create and manage containers for tasks such as locally hosting the registry. If you wish to run the tools from within a sandbox, the tools must have the ability to reach outside the sandbox to the host's Docker environment.
 
-## Pre-Built
-
-The [AuditCrowd Sandbox](https://github.com/auditcrowd/sandbox) was created to run the ZeroBias tools from within a Docker container. Consider using this if it meets your needs.
 
 ## Roll Your Own
 
