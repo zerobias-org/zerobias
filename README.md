@@ -42,6 +42,49 @@ own. The meta-repo is useful when you want to:
 
 ## Quick start
 
+## What you need
+
+
+### Accounts
+
+- **ZeroBias** at [`app.zerobias.com`](https://app.zerobias.com)
+  if you want the live platform integrations below (MCPs, private NPM,
+  `zb` CLI). External readers can browse all source without an account.
+- **GitHub** at [`github.com`](https://github.com)
+
+### Access Tokens
+
+- **ZeroBias Platform Org ID and API Key**
+  - [Login to ZeroBias](https://app.zerobias.com)
+  - Click profile avatar (upper right)
+  - Click "Create New API Key"
+  - Note Organization ID and API Key (Keep these secure)
+- **GitHub Personal Access Token (PAT)**
+  - Create [New (Classic) PAT](https://github.com/settings/tokens/new) (read:packages)
+  - Assign to environment variable `NPM_TOKEN` (or `READ_TOKEN`)
+
+### Workstation Tools
+
+Ensure the following tools are present on your workstation:
+
+- **git [>= 2.34]**
+- **Java [>= 21.0]**
+- **Node [>= 22.20.0]**
+- **Python [>= 3.12]**
+- **Docker [>= 29.6.1]**
+- [**Claude Code [>= 2.0]**](https://claude.com/claude-code)
+
+
+This meta-repo is designed to be driven by an agent — one working tree
+  spanning every public `zerobias-org` repo so the agent can read,
+  search, and reason across them at once. Everything works without
+  Claude Code, but most of the leverage is gone. 
+
+### Docker Container
+
+If you wish to run the ZeroBias tools in a Docker container, review [sandbox](./docs/Sandbox.md).
+
+
 ```bash
 # 1. Clone this meta-repo
 git clone https://github.com/zerobias-org/zerobias.git
@@ -68,6 +111,9 @@ so no GitHub-API lookup or `gh` CLI is needed at clone time.
 Maintainers refresh that list when the org adds a new repo via
 `scripts/refresh-repos-list.sh` (which does use `gh`).
 
+## Docker Container
+
+If you wish to run the ZeroBias tools in a Docker container, review [sandbox](./docs/Sandbox.md).
 
 ---
 
