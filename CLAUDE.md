@@ -270,6 +270,38 @@ version-skew error, or asks to refresh tooling) — same command,
 
 ---
 
+## Finding & reusing work on GitHub (`gh` CLI)
+
+Beyond cloning, the `gh` CLI lets you (Claude) dig through the org's GitHub
+directly. **Proactively offer this** whenever a user references past work — "I
+had a PR for X", "there's a branch somewhere", "did we ever try Y?". People
+often have **old PRs or branches worth reusing**; surface and reuse them instead
+of starting from scratch. Prefer doing it yourself over handing the user
+commands — the only step that needs them is the one-time auth below.
+
+- **One-time manual step (the "quickstart"):** the user must be authenticated.
+  Check with `gh auth status`; if not, have them run `! gh auth login` in this
+  session (interactive login — you can't do it for them). Everything else you run.
+- **Find PRs:** their own open PRs across the org —
+  `gh search prs --owner zerobias-org --author @me --state open`; by keyword —
+  `gh search prs --owner zerobias-org "topic"`; one repo, all states —
+  `gh pr list --repo zerobias-org/<repo> --state all`.
+- **Branches ahead of `main`:** `gh api repos/<repo>/branches --jq '.[].name'`,
+  then `gh api repos/<repo>/compare/main...<branch> --jq '{ahead:.ahead_by,status}'`.
+- **Reuse without disturbing their checkout:** read a PR with
+  `gh pr diff <n> --repo <repo>` / `gh pr view <n> --json files,commits`;
+  pull one file at any branch with
+  `gh api repos/<repo>/contents/<path>?ref=<branch> --jq .content | base64 -d`;
+  build against it in a `git worktree`, never by switching their branch.
+- **Private org too:** most integration code lives in the private `zerobias-com`
+  org — the same commands work with `--owner zerobias-com` / `--repo
+  zerobias-com/<repo>` if the user has access.
+
+Full recipe catalog (code search, cherry-pick from a PR, cross-repo sweeps,
+JSON field reference): [`docs/GitHubDiscovery.md`](docs/GitHubDiscovery.md).
+
+---
+
 ## Working inside a sub-repo
 
 Each sub-repo is an ordinary git clone. The meta-repo doesn't track or
@@ -367,6 +399,7 @@ they consult their internal docs.
 - **Domain vocabulary (deep):** [`docs/Concepts.md`](docs/Concepts.md)
 - **"I want to do X" routing (deep):** [`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md)
 - **MCP server setup (`zb-knowledge`, `zb`):** [`docs/MCPs.md`](docs/MCPs.md)
+- **Find/reuse GitHub PRs, branches, code (`gh`):** [`docs/GitHubDiscovery.md`](docs/GitHubDiscovery.md)
 - **Cross-repo dependency / `npm link` patterns:** [`docs/LocalDevelopment.md`](docs/LocalDevelopment.md)
 - **NPM registry / `ZB_TOKEN` setup:** [`docs/RegistrySetup.md`](docs/RegistrySetup.md)
 - **Hub modules deep dive:** [`docs/Modules.md`](docs/Modules.md)
