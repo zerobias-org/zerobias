@@ -109,6 +109,9 @@ exist** in the live MCP. For catalog discovery use `store.Vendor.get` /
 
 ## PR hygiene
 
+- **Timing: PRs come LAST.** New/changed content is first `publishOrg`-loaded into
+  the author's own org and iterated there (see `/create-product` dossier §11); PRs
+  are opened only after the user explicitly signs off on the org-loaded result.
 - The content repos PR against **`dev`** (not `main`).
 - **Every PR body MUST carry a ⚠️ SME-review section** — the low-confidence / judgment
   items (new features/segments, judgment calls, M/L-confidence editions/components,

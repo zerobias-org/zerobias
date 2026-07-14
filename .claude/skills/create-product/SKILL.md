@@ -48,8 +48,10 @@ for its catalog part.
   `.connector/<vendor>-[<suite>-]<product>.md`, gitignored) is the shared state.
   Written after Phase 0.5; updated as each layer lands.
 - **Content-as-code, validated by the gradle gate** (`./gradlew :…:validate`),
-  never `npm run validate` (stale — rejects canonical `hostingTypes: saas`). PRs
-  target **`dev`**.
+  never `npm run validate` (stale — rejects canonical `hostingTypes: saas`).
+- **Publish path: org first, PRs later.** The default deliverable is content
+  `publishOrg`-loaded into the user's own org (Phase 3). PRs → base **`dev`**
+  happen only after the user explicitly signs off on the loaded result (Phase 4).
 
 ## Phase 0 — parse inputs
 Required (ask via `AskUserQuestion` if missing): **vendor name** + **product name**,
@@ -126,9 +128,22 @@ Skip layers that already exist; do only what Phase 1/1.5 selected. One
    standards must be loaded). **SME-gated** — author only against real published
    `framework/`+`standard/` elements; may be left `elements: []` if deferred.
 
-## Phase 3 — validate + PRs
+## Phase 3 — validate + load to YOUR org (default publish path)
 - Validate every touched package: `./gradlew :<path>:validate`.
-- Open **one PR per repo** touched (`vendor/`?, `suite/`?, `product/`,
+- **`publishOrg` + org load — no PRs yet.** For every touched package, in
+  dependency order (vendor → suite? → product → compliance_feature → segment):
+  `publishOrg` publishes an org-private artifact and the dev dataloader loads it
+  straight into the user's org — full recipe (the `zbb.yaml` env block + the
+  re-load-via-`POST /dataloader/jobs` fast path + catalog verification) in the
+  dossier **§11**.
+- Verify in the catalog, show the user, and **iterate here** (edit → validate →
+  re-`publishOrg` → re-load) until they are satisfied.
+
+## Phase 4 — PRs to `dev` (ONLY after explicit user sign-off)  ⭐
+- **Gate: do NOT open any PR until the user explicitly says they're happy with
+  the org-loaded result** (e.g. "I'm happy with how things look now"). Silence or
+  more iteration requests are NOT sign-off — if unclear, ask.
+- Then open **one PR per repo** touched (`vendor/`?, `suite/`?, `product/`,
   `compliance_feature/`?, `segment/`?) → base **`dev`**. Drive git via the `git`
   skill (selective staging, approval before commit, no Claude coauthor).
 - **Every PR body MUST carry a ⚠️ SME-review section** from the dossier's **§9**:
@@ -136,11 +151,8 @@ Skip layers that already exist; do only what Phase 1/1.5 selected. One
   candidates deliberately omitted, deferred control mappings. A clean diff hides
   uncertainty. (The `git` skill handles mechanics only — YOU own composing the
   PR body + §9 surface.)
-- **Load into your OWN org without a PR (for testing/iteration):** `publishOrg` publishes an
-  org-private artifact and the dev dataloader loads it straight into your org — full recipe
-  (the `zbb.yaml` env block + the re-load-via-`POST /dataloader/jobs` fast path + catalog
-  verification) in the dossier **§11**. PRs to `dev` remain how content reaches the *shared*
-  catalog.
+- PRs to `dev` remain how content reaches the *shared* catalog; `publishOrg`
+  output stays org-private.
 
 ## Reference (don't restate — link)
 Enums, NO-suite rule + safety, the feature-wiring chain, MCP op corrections, and PR

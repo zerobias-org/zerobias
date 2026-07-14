@@ -86,8 +86,10 @@ research → discovery → suite decision → scaffolding the whole catalog chai
 features → segment `supports.yml` → control links), validation via the gradle
 gate, the dossier, the brief, and the PR §9 SME-review surface.
 
-> **Test-load to your own org (no PR):** to load the product into your org while iterating,
-> see `/create-product`'s dossier **§11** — the `publishOrg` recipe.
+> **Catalog publish path — org first, PRs later:** `/create-product` ends by
+> `publishOrg`-loading the content into the user's own org (dossier **§11**) and
+> iterating there. PRs to `dev` are opened only after the user explicitly signs
+> off on the org-loaded result (its Phase 4 gate).
 
 Crucially, `/create-product` **checks whether the product already exists and asks
 what to do**:
@@ -269,8 +271,9 @@ Record the registry URL and per-package publish status in the brief.
 
 ## `zb` MCP usage rules
 
-This skill is **read-only** against the `zb` MCP. Catalog additions go through PRs
-to the sub-repos (via `/create-product`), not direct platform writes.
+This skill is **read-only** against the `zb` MCP. Catalog additions reach the
+platform via `publishOrg` + the dataloader first, then PRs to the sub-repos after
+user sign-off (both via `/create-product`) — never direct MCP writes.
 
 - **Catalog discovery / suite decision** happen inside `/create-product` (Part 1)
   via `store.Vendor.get` / `store.Suite.get` / `store.*.listProducts`. The
