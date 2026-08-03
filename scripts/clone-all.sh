@@ -131,6 +131,9 @@ echo "  already present:  $skipped_present"
 echo "  ignored:          $skipped_ignored"
 [ $failed -gt 0 ] && echo "  failed:           $failed"
 
+# Refresh root-level copies of sub-repo skills (see scripts/sync-skills.sh).
+"$SCRIPT_DIR/sync-skills.sh" || echo "⚠️  skill sync failed — run ./scripts/sync-skills.sh manually"
+
 if [ $failed -gt 0 ]; then
     exit 1
 fi

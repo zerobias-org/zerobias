@@ -62,6 +62,15 @@ Re-running `./scripts/clone-all.sh` is safe — it only clones repos that
 aren't already present. To refresh existing clones to the tip of their
 default branch, run `./scripts/update_all.sh`.
 
+Both scripts finish by running
+[`scripts/sync-skills.sh`](scripts/sync-skills.sh), which copies every
+sub-repo's Claude Code skills into the root `.claude/skills/` under
+`<repo>--<skill>` names (gitignored, also refreshed at the start of each
+Claude session). This makes them usable from sessions launched at the
+meta-repo root; each copy opens with a header naming the sub-repo it
+executes in. Edit the source skill inside its sub-repo — never the
+generated copy.
+
 **Requirements:** just `git`. The list of repos to clone lives in
 [`scripts/repos.list`](scripts/repos.list) (committed to this repo),
 so no GitHub-API lookup or `gh` CLI is needed at clone time.

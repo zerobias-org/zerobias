@@ -43,10 +43,12 @@ those packages are made available via the **local Verdaccio registry** (see
 ### Two mechanisms — why module & collectorbot can't be sub-agents
 
 - **In-session sub-agents** drive Part 1 (inside `/create-product`) and this
-  orchestrator's own steps. A sub-agent **reads** the relevant sub-repo doc/script
-  and **follows it inline** — it does NOT invoke the sub-repo's slash-command
-  (those aren't registered in this session). The main session sees only each
-  sub-agent's ≤200-word report.
+  orchestrator's own steps. Sub-repo skills are registered in root sessions as
+  synced **`<repo>--<skill>`** copies (`scripts/sync-skills.sh`), so a sub-agent
+  **invokes** the relevant one (e.g. `product--create-product`) and honors its
+  execution-context header; sub-repo assets with no synced copy (plain
+  docs/scripts, `.claude/commands/*`) are still read and followed inline. The
+  main session sees only each sub-agent's ≤200-word report.
 - **Handoff prompts** drive Parts 2 & 3. `/create-module` fans out to ~20
   sequential specialist agents; `/create-collector` → `/review-collector` fans out
   to 8 **parallel** agents. A sub-agent **cannot spawn sub-agents**, so those

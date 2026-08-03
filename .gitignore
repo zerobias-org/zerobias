@@ -39,3 +39,7 @@ node_modules/
 !/docs/
 !/scripts/
 !/artifact-map/
+
+# Generated copies of sub-repo skills (scripts/sync-skills.sh). Regenerated
+# by clone-all.sh / update_all.sh — edit the source skill in its sub-repo.
+.claude/skills/*--*/

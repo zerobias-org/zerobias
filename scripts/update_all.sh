@@ -359,6 +359,9 @@ for i in "${!repos[@]}"; do
     cd "$META_ROOT"
 done
 
+# Refresh root-level copies of sub-repo skills (see scripts/sync-skills.sh).
+"$SCRIPT_DIR/sync-skills.sh" --quiet || echo "⚠️  skill sync failed — run ./scripts/sync-skills.sh manually"
+
 echo ""
 echo "${C_BOLD}Done.${C_RESET} $succeeded updated, $skipped skipped, $failed failed."
 if [ ${#failed_repos[@]} -gt 0 ]; then

@@ -37,9 +37,10 @@ for its catalog part.
 > step-by-step FLOW; that doc is the WHAT/WHY. Don't restate it — link it.
 
 > **Two `create-product` skills, different layers.** THIS meta-repo skill
-> orchestrates the whole catalog chain. The sub-repo leaf
-> `product/.claude/skills/create-product` only scaffolds the product *package* —
-> this skill **follows it inline** (with the known fixes below) for that one step.
+> orchestrates the whole catalog chain. The sub-repo leaf — registered in root
+> sessions as the synced **`product--create-product`** skill — only scaffolds
+> the product *package*; this skill **invokes it** (with the known fixes below)
+> for that one step.
 
 ## Execution model
 - **In-session sub-agents** (research, discovery, scaffold) keep the main context
@@ -106,8 +107,9 @@ Skip layers that already exist; do only what Phase 1/1.5 selected. One
    `build.gradle.kts` (`plugins { id("zb.content") }`); `./gradlew :<v>:gate`.
 2. **suite?** (only if suite) — `cd suite`; `sh scripts/createNewSuite.sh <v>/<s>`;
    `./gradlew :<v>:<s>:gate`.
-3. **product** — `cd product`; follow `product/.claude/skills/create-product`
-   inline. **KNOWN FIXES (stale Lerna leaf):** add `build.gradle.kts`
+3. **product** — invoke the **`product--create-product`** skill (synced copy of
+   the sub-repo leaf; its header pins execution to `product/`).
+   **KNOWN FIXES (stale Lerna leaf):** add `build.gradle.kts`
    (`plugins { id("zb.content") }`) or it can't be gated; use `store.Vendor.get` /
    `store.Suite.get` (not `portal.*`); canonical enums (see doc:
    `factoryTypes software|firmware|hardware`, `hostingTypes iaas|paas|saas` →
