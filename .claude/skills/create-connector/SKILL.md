@@ -64,7 +64,7 @@ The brief is **created by `/create-product` in Part 1** (from
 [`../create-product/brief-template.md`](../create-product/brief-template.md)) at:
 
 ```
-/Users/ctamas/zerobias-org/.connector/<vendor>-[<suite>-]<product>.md
+<meta-repo-root>/.connector/<vendor>-[<suite>-]<product>.md
 ```
 
 (`.connector/` is gitignored — transient state.) It is the single source of truth
@@ -209,10 +209,22 @@ depends on `@zerobias-org/schema-zerobias-zerobias-base` + `-ts`).
 This pick must happen **before** the Part 3 handoff, so the chosen interface is
 fixed in the brief and baked into the collector handoff prompt. The orchestrator:
 
-- Enumerates candidate interfaces from the local schema clone —
-  `/Users/ctamas/zerobias-org/schema/package/*/*/interfaces/*.yml` (interfaces
-  live in source, not on the platform). Common reusable bases: `Principal`,
-  `Secret`, `Provider`, `DBMS`, `CloudEnvironment`, `Account`, `Repository`.
+- Enumerates candidate interfaces from the local schema clone (interfaces live in
+  source, not on the platform), relative to the meta-repo root — **both depths**:
+
+  ```
+  schema/package/*/*/interfaces/*.yml
+  schema/package/*/*/*/interfaces/*.yml
+  ```
+
+  **Both are required.** The base package's interfaces sit three levels deep at
+  `schema/package/zerobias/zerobias/base/interfaces/`, so a two-level glob alone
+  silently returns *none* of the reusable bases below — which are the ones this
+  flow tells you to target. Sanity-check that the result contains `Asset` and
+  `Principal` before presenting it; if it doesn't, the enumeration is wrong.
+
+  Common reusable bases: `Principal`, `Secret`, `Provider`, `DBMS`,
+  `CloudEnvironment`, `Account`, `Repository`, `Asset`.
 - Presents candidates to the user via `AskUserQuestion`, using each interface
   YAML's one-line `description:`.
 - Records in the brief: the chosen interface(s), the schema package
@@ -248,6 +260,17 @@ and never needs a push.
 
 Setup once per machine:
 
+> **Known issue — `zbb registry start` fails on a clean slot.** It resolves the
+> stack by the unscoped name `registry`, which is an unrelated package on public
+> npm; the real stack is `@zerobias-com/registry` and is not published. The stack
+> source ships in this working tree, so add it by path first (once per slot):
+>
+> ```
+> zbb --slot cc-test stack add util/packages/zbb/stacks/registry --as registry
+> ```
+>
+> No token is required. Tracked on the platform bug board.
+
 ```
 zbb slot create cc-test
 zbb --slot cc-test registry start      # or auto-starts as a dep of dana
@@ -281,7 +304,8 @@ user sign-off (both via `/create-product`) — never direct MCP writes.
   via `store.Vendor.get` / `store.Suite.get` / `store.*.listProducts`. The
   `portal.*.search` ops cited in some sub-repo docs do not exist — use `store.*`.
 - **Schema-interface pick** — enumerate interfaces from the local schema clone
-  (`schema/package/*/*/interfaces/*.yml`); no MCP call needed.
+  (`schema/package/*/*/interfaces/*.yml` and `schema/package/*/*/*/interfaces/*.yml`
+  — both depths, see the schema-interface pick); no MCP call needed.
 - **Write guard** — any non-`list`/`get`/`search` op must pause and confirm with
   the user. The orchestrator never writes through the MCP.
 
