@@ -61,13 +61,17 @@ there.
 Hosted HTTP MCP, no local install. Run once:
 
 ```bash
-claude mcp add -s user \
-  --transport http \
-  --header "dana-org-id: <YOUR_ORG_ID>" \
-  --header "Authorization: ApiKey <YOUR_API_KEY>" \
+claude mcp add -s user --transport http \
   zb-knowledge \
-  https://api.app.zerobias.com/knowledge-mcp/mcp
+  https://api.app.zerobias.com/knowledge-mcp/mcp \
+  --header "dana-org-id: <YOUR_ORG_ID>" \
+  --header "Authorization: ApiKey <YOUR_API_KEY>"
 ```
+
+The server name and URL must come **before** `--header`. `--header`
+takes a variable number of values, so anything following it is
+swallowed as another header — putting the positionals last fails with
+`error: missing required argument 'name'`.
 
 `-s user` installs globally (recommended for your dev machine). Drop
 the flag for project-only. **Don't** use `-s project` — that scope

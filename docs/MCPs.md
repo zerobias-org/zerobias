@@ -81,13 +81,17 @@ Add the server with the Claude Code CLI — replace `<YOUR_ORG_ID>` and
 install project-only instead of globally.
 
 ```bash
-claude mcp add -s user \
-  --transport http \
-  --header "dana-org-id: <YOUR_ORG_ID>" \
-  --header "Authorization: ApiKey <YOUR_API_KEY>" \
+claude mcp add -s user --transport http \
   zb-knowledge \
-  https://api.app.zerobias.com/knowledge-mcp/mcp
+  https://api.app.zerobias.com/knowledge-mcp/mcp \
+  --header "dana-org-id: <YOUR_ORG_ID>" \
+  --header "Authorization: ApiKey <YOUR_API_KEY>"
 ```
+
+> ⚠️ Order matters: the server name and URL must come **before** the
+> `--header` flags. `--header` is variadic, so any positional argument
+> after it is parsed as an additional header value and the command
+> fails with `error: missing required argument 'name'`.
 
 Or, if you prefer to edit `~/.claude.json` directly:
 
@@ -124,6 +128,26 @@ test connectivity without listing data, ask it to run `health_check`.
 - **`401 Invalid credentials`** — the API key is malformed, revoked,
   or doesn't belong to the org. Regenerate from your account settings
   and confirm both values match.
+- **`error: missing required argument 'name'` when adding the server**
+  — the positional arguments are after `--header`. See the ordering
+  note in [Setup](#setup) above.
+- **`Failed to connect — MCP endpoint not found`** — misleading; the
+  URL is usually fine. A wrong `dana-org-id` returns a `404` that
+  Claude Code renders as a missing endpoint. Confirm by calling the
+  endpoint directly — a bad org ID answers with
+  `{"key":"err.no.such.object","type":"Org","id":"<the id you sent>"}`,
+  which names the real problem:
+
+  ```bash
+  curl -sS -X POST https://api.app.zerobias.com/knowledge-mcp/mcp \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -H "dana-org-id: <YOUR_ORG_ID>" \
+    -H "Authorization: ApiKey <YOUR_API_KEY>" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"probe","version":"1"}}}'
+  ```
+
+  A working pair returns `"serverInfo":{"name":"ZeroBias Knowledge MCP Server"}`.
 - **MCP server not listed in `/mcp`** — the entry must be under
   `mcpServers` in `~/.claude.json`, `type` must be `http`, URL must
   match exactly. Restart Claude Code after edits.
