@@ -132,10 +132,11 @@ Add a connector for github.
 > stops with a clear schema TODO. Works for any SaaS.
 
 ```
-Where is the GitHub module's authentication implemented?
+Where is the Avigilon Alta Access module's authentication implemented?
 ```
 > Cross-repo semantic search via `zb-knowledge`. Returns file paths
-> with line numbers.
+> with line numbers — here, `connect()` in
+> `module/package/avigilon/alta/access/src/AvigilonAltaAccessClient.ts`.
 
 ```
 What's the difference between a vendor, a product, a suite, and a segment?
