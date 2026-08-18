@@ -24,11 +24,17 @@ Open **PowerShell** and run:
 wsl -l -v
 ```
 
-| What you see | What to do |
-|--------------|------------|
-| `Ubuntu` listed with `VERSION` = 2 | You're set. Open it (`wsl` in PowerShell, or the **Ubuntu** app from the Start menu) and skip to [step 3](#step-3--install-git-and-claude-code-inside-ubuntu). |
-| `Ubuntu` listed with `VERSION` = 1 | Upgrade it (command below), then open it and skip to step 3. |
-| Nothing installed / command not recognized | Go to [step 1](#step-1--install-wsl-2--ubuntu). |
+| What you see | What it means | What to do |
+|--------------|---------------|------------|
+| `Ubuntu` listed with `VERSION` = 2 | You're set. | Enter it ([step 2](#step-2--enter-ubuntu-and-create-your-linux-user)) and continue at [step 3](#step-3--install-git-and-claude-code-inside-ubuntu). |
+| `Ubuntu` listed with `VERSION` = 1 | Old WSL 1 distro. | Upgrade it (command below), then enter it and continue at step 3. |
+| "…has no installed distributions" | WSL itself is installed, but **no Linux distro is** — a common leftover when a previous `wsl --install` never finished. | Run the [step 1](#step-1--install-wsl-2--ubuntu) command anyway — with WSL already present it installs *just* Ubuntu, usually with no reboot. Then step 2. |
+| Other distros only (e.g. `Debian`) | WSL works, but Ubuntu is missing — and Ubuntu is the only distro supported here. | Run the [step 1](#step-1--install-wsl-2--ubuntu) command — it adds Ubuntu alongside without touching the others. Then step 2. |
+| Error / command not recognized | No WSL at all. | Go to [step 1](#step-1--install-wsl-2--ubuntu). |
+
+> ⚠️ Docker Desktop users: `docker-desktop` / `docker-desktop-data` in
+> this list are Docker's internal utility VMs, **not** a distro you can
+> use. If they're all you see, you're in the "no distro" row.
 
 To upgrade a `VERSION` = 1 Ubuntu to WSL 2:
 
@@ -46,12 +52,31 @@ wsl --install -d Ubuntu
 
 Reboot if Windows asks you to.
 
-## Step 2 — first launch
+> ⚠️ **After the reboot, check that Ubuntu actually got installed** —
+> run `wsl -l -v` again. Sometimes the first run only installs the WSL
+> platform and the Ubuntu part never resumes, leaving you with "no
+> installed distributions". If so, run `wsl --install -d Ubuntu` once
+> more: with the platform already in place it now installs just
+> Ubuntu, with no further reboot.
 
-Open the **Ubuntu** app from the Start menu. On first launch it asks
-you to create a Linux username and password — this is your Linux user,
-independent of your Windows account. When you land at a `$` prompt,
-you're inside Ubuntu.
+## Step 2 — enter Ubuntu and create your Linux user
+
+There are two equivalent ways into the Ubuntu machine — use whichever
+you like, now and every time after:
+
+- **Start menu:** open the **Ubuntu** app.
+- **From PowerShell:** type `wsl` (opens your default distro), or
+  explicitly:
+
+```powershell
+wsl -d Ubuntu
+```
+
+On first launch Ubuntu asks you to create a Linux username and
+password — this is your Linux user, independent of your Windows
+account. You know you're inside when the prompt changes from `PS C:\`
+to something like `user@machine:~$`. Type `exit` to get back to
+PowerShell.
 
 ## Step 3 — install git and Claude Code (inside Ubuntu)
 
@@ -74,7 +99,12 @@ Verify the install:
 claude --version
 ```
 
-Then start `claude` and log in by typing `/login` at the prompt.
+Then start `claude` — on first launch it walks you through login
+automatically (in an already-running session, type `/login`).
+
+> ⚠️ In WSL the browser sometimes can't reach the login callback. The
+> flow handles this: press `c`, open the shown URL in your Windows
+> browser, log in, and paste the code back into the terminal.
 
 ## Step 4 — clone the meta-repo INSIDE WSL
 
@@ -114,7 +144,7 @@ a second Claude session on the Windows side (see
 ## Golden rule — know which side you are on
 
 > ⚠️ **If your prompt says `PS C:\`, you are in the wrong place** for
-> everything except steps 1–2 above. No cloning, no editing, and no
+> everything except steps 0–2 above. No cloning, no editing, and no
 > running anything via `C:\` or `/mnt/c`. No Windows editors touching
 > these files either — `/mnt/c` is a slow network filesystem, and the
 > tooling in these repos assumes Linux. Windows exists only to host
