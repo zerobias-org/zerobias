@@ -126,6 +126,14 @@ users there.
   `~/.bashrc`; headless host via `claude remote-control`; or combined
   with credential setup:
   `./scripts/setup-org-credentials.sh --launch --remote-control`.
+- **In a WSL session: setup in the terminal, then hand off.** Logins
+  and credentials are terminal work — `gh auth login`, `claude`'s
+  first-run login, and `./scripts/setup-org-credentials.sh` (run by
+  the user themselves, outside Claude) all need the Ubuntu terminal.
+  Encourage the user to stay there until setup is green; once it is,
+  suggest moving to the Claude desktop or mobile app via Remote
+  Control (`/remote-control`, or relaunch with
+  `claude --remote-control`) for everything after.
 
 ---
 

@@ -126,6 +126,11 @@ bootstrap (`./scripts/clone-all.sh`) on its own.
 
 ## Step 5 (optional) — Remote Control
 
+> 💡 **Recommended rhythm:** do the setup phase in the Ubuntu
+> terminal — logins and credential prompts are interactive and need
+> it — and once everything is green, move to the Claude desktop or
+> mobile app via Remote Control for day-to-day work.
+
 Remote Control lets you drive the WSL session from your phone or
 browser. Three ways to turn it on:
 
