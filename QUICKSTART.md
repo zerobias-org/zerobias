@@ -9,6 +9,12 @@ fastest path to actually doing something.
 ## What you need
 
 - **Git.**
+- **Linux or macOS — or WSL2 on Windows.** `zbb` does not run natively on
+  Windows: every invocation fails in the Node ESM loader with
+  `Received protocol 'c:'` (the bin shim hands the loader a drive-letter
+  path where a `file://` URL is required). A Windows-native build is not
+  planned. **On Windows, do everything below inside WSL2** — that is the
+  supported path and the one this toolchain is verified on.
 - **[Claude Code](https://claude.com/claude-code)** v2.0 or newer. This
   meta-repo is designed to be driven by an agent — one working tree
   spanning every public `zerobias-org` repo so the agent can read,
@@ -118,6 +124,13 @@ npm install -g @zerobias-org/zbb@latest
 
 `@latest` re-resolves to the newest published version any time you
 re-run.
+
+**Runtime versions.** `zbb` declares `engines: { node: '>=22.0.0' }`, but the
+content sub-repos pin specific versions — `module/.nvmrc` and
+`collectorbot/.nvmrc`. Run `nvm use` inside each sub-repo rather than relying
+on whatever is global; a Node-major mismatch surfaces as opaque ESM loader
+errors. Java 17 and a running Docker daemon are also required for
+`zbb` slots/stacks.
 
 ## Example prompts to try
 
