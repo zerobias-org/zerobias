@@ -126,15 +126,39 @@ bootstrap (`./scripts/clone-all.sh`) on its own.
 
 ## Step 5 (optional) — Remote Control
 
-To drive your WSL session from your phone or browser: inside a running
-`claude` session, type `/remote-control`. Press **spacebar** for a QR
-code and scan it with the Claude mobile app, or open
+Remote Control lets you drive the WSL session from your phone or
+browser. Three ways to turn it on:
+
+- **In a running session:** type `/remote-control`.
+- **At startup:** launch with the flag —
+
+```bash
+claude --remote-control
+```
+
+- **Always on:** add an alias to `~/.bashrc` so every `claude` starts
+  with it (skip it once with `\claude`):
+
+```bash
+alias claude='claude --remote-control'
+```
+
+Once active, press **spacebar** for a QR code and scan it with the
+Claude mobile app, or open
 [https://claude.ai/code](https://claude.ai/code). Requires a
 Pro/Max/Team Claude subscription and being logged in with that
 account. Docs:
 [https://code.claude.com/docs/en/remote-control.md](https://code.claude.com/docs/en/remote-control.md)
 
-This is also the **supported way to control the WSL session from the
+Prefer the WSL terminal to only *host* the session while you work
+entirely from the Claude app? Run server mode instead — no local
+prompt, it just waits for connections:
+
+```bash
+claude remote-control
+```
+
+This is the **supported way to control the WSL session from the
 Claude desktop, web, or mobile app** — use it instead of ever starting
 a second Claude session on the Windows side (see
 [one session only](#one-session-only--no-agent-ping-pong)).
