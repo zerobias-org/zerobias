@@ -84,6 +84,8 @@ Options:
                    repo) with the slot creds exported and verified. Everything
                    after --launch goes to claude, so a headless run is:
                    $0 --launch -p "make vendor x"
+                   and a session with Remote Control active from the start:
+                   $0 --launch --remote-control
   -h, --help       Show this help.
 
 Env vars pre-seed the prompts (each one set = one prompt skipped):
@@ -182,6 +184,21 @@ stash() { # $1=var $2=original-value
   printf 'export %s=%q\n' "$1" "$2" >> "$stash_file"
 }
 last_line() { printf '%s\n' "$1" | awk 'NF{v=$0} END{print v}'; }
+trim() { # strip CRs + leading/trailing whitespace — pasted values often carry both
+  local s="${1//$'\r'/}"
+  s="${s#"${s%%[![:space:]]*}"}"
+  printf '%s' "${s%"${s##*[![:space:]]}"}"
+}
+mask() { # $1=secret → abc…xyz preview so the user can recognize what they entered
+  if [ ${#1} -ge 8 ]; then printf '%s…%s' "${1:0:3}" "${1: -3}"; else printf '(too short to preview)'; fi
+}
+read_secret() { # $1=prompt $2=varname — hidden read; trimmed; masked echo-back
+  local _v
+  read -rsp "$1" _v; echo
+  _v=$(trim "$_v")
+  [ -n "$_v" ] && say "  got: $(mask "$_v") (${#_v} chars)"
+  printf -v "$2" '%s' "$_v"
+}
 # Accept bare hosts ("ci.zerobias.com"), with/without scheme, with/without /api.
 normalize_url() { # $1=raw → prints https://host/api form
   local u="$1"
@@ -250,7 +267,7 @@ resolve_org() { # $1=name-or-uuid → sets ZB_ORG_ID (+ORG_NAME); 1 = re-ask
 for v in ZB_PLATFORM_URL ZB_ORG_ID ZB_API_KEY ZB_TOKEN; do
   eval "cur=\${$v:-}"
   [ -n "$cur" ] || continue
-  clean=$(last_line "$cur")
+  clean=$(trim "$(last_line "$cur")")
   [ "$v" = "ZB_PLATFORM_URL" ] && clean=$(normalize_url "$clean")
   if [ "$clean" != "$cur" ] || ! valid "$v" "$clean"; then
     stash "$v" "$cur"
@@ -290,6 +307,7 @@ fi
 if [ -z "${ZB_PLATFORM_URL:-}" ]; then
   if [ -n "$def_url" ] && [ -n "$def_org" ]; then
     read -rp "Target [$def_url · ${def_name:-org} ${def_name:+(}$def_org${def_name:+)}] — Enter to keep, or type a new URL: " a || a=""
+    a=$(trim "$a")
     if [ -z "$a" ]; then
       ZB_PLATFORM_URL="$def_url"; ZB_ORG_ID="${ZB_ORG_ID:-$def_org}"
     else
@@ -297,6 +315,7 @@ if [ -z "${ZB_PLATFORM_URL:-}" ]; then
     fi
   else
     read -rp "Platform URL [https://app.zerobias.com/api]: " a || a=""
+    a=$(trim "$a")
     ZB_PLATFORM_URL=${a:-https://app.zerobias.com/api}
   fi
 fi
@@ -311,6 +330,7 @@ if [ -z "${ZB_ORG_ID:-}" ]; then
     else
       read -rp "Org (name or UUID): " a || a=""
     fi
+    a=$(trim "$a")
     [ -n "$a" ] || { say "✗ org is required."; exit 1; }
     resolve_org "$a" && break
     [ -t 0 ] || { say "✗ could not resolve org non-interactively."; exit 1; }
@@ -454,7 +474,7 @@ if [ -z "$picked" ]; then
   say "Generate one in the TARGET env's app UI (keys are PER-ENVIRONMENT,"
   say "and it must be an ORG OWNER key — member keys cannot load):"
   say "  ${ZB_PLATFORM_URL%/api} → Settings → API Keys"
-  read -rsp "ORG key — org OWNER API key (hidden): " ZB_API_KEY; echo
+  read_secret "ORG key — org OWNER API key (hidden): " ZB_API_KEY
   [ -n "$ZB_API_KEY" ] || { say "✗ the ORG key is required."; exit 1; }
 fi
 
@@ -502,7 +522,7 @@ if [ -z "$reg_picked" ]; then
   say "The registry key must be a PROD API key — pkg.zerobias.org currently"
   say "accepts only prod-issued keys, regardless of which env you publish"
   say "orgs into. Generate one at: https://app.zerobias.com → Settings → API Keys"
-  read -rsp "REGISTRY key — PROD API key (hidden): " a; echo
+  read_secret "REGISTRY key — PROD API key (hidden): " a
   [ -n "$a" ] || { say "✗ a registry key is required (used by gate + publish)."; exit 1; }
   ZB_TOKEN="$a"
   if registry_ok "$ZB_TOKEN"; then
