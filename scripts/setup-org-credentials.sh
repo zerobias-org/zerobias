@@ -84,6 +84,8 @@ Options:
                    repo) with the slot creds exported and verified. Everything
                    after --launch goes to claude, so a headless run is:
                    $0 --launch -p "make vendor x"
+                   and a session with Remote Control active from the start:
+                   $0 --launch --remote-control
   -h, --help       Show this help.
 
 Env vars pre-seed the prompts (each one set = one prompt skipped):
