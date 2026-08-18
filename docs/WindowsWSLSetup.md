@@ -227,8 +227,11 @@ session to the Claude desktop, web, or mobile app: run
 **Do I need WSL? Claude Code runs natively on Windows now.**
 Natively, yes — but these repos don't. The entire toolchain
 (builds, scripts, validation) runs only on Ubuntu, so WSL is required
-*here*. A native Windows install of Claude Code cannot be used to work
-with these repos.
+*here*. It's not just policy: `zbb`, the org's core build CLI, fails
+outright on native Windows (Node ESM loader error
+`Received protocol 'c:'`), and no Windows-native build is planned. A
+native Windows install of Claude Code cannot be used to work with
+these repos.
 
 **Can I use a Hyper-V Ubuntu VM instead?**
 It works — it's normal Ubuntu, so SSH in and follow the same steps
