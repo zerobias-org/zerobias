@@ -61,13 +61,17 @@ there.
 Hosted HTTP MCP, no local install. Run once:
 
 ```bash
-claude mcp add -s user \
-  --transport http \
-  --header "dana-org-id: <YOUR_ORG_ID>" \
-  --header "Authorization: ApiKey <YOUR_API_KEY>" \
+claude mcp add -s user --transport http \
   zb-knowledge \
-  https://api.app.zerobias.com/knowledge-mcp/mcp
+  https://api.app.zerobias.com/knowledge-mcp/mcp \
+  --header "dana-org-id: <YOUR_ORG_ID>" \
+  --header "Authorization: ApiKey <YOUR_API_KEY>"
 ```
+
+The server name and URL must come **before** `--header`. `--header`
+takes a variable number of values, so anything following it is
+swallowed as another header — putting the positionals last fails with
+`error: missing required argument 'name'`.
 
 `-s user` installs globally (recommended for your dev machine). Drop
 the flag for project-only. **Don't** use `-s project` — that scope
@@ -128,10 +132,11 @@ Add a connector for github.
 > stops with a clear schema TODO. Works for any SaaS.
 
 ```
-Where is the GitHub module's authentication implemented?
+Where is the Avigilon Alta Access module's authentication implemented?
 ```
 > Cross-repo semantic search via `zb-knowledge`. Returns file paths
-> with line numbers.
+> with line numbers — here, `connect()` in
+> `module/package/avigilon/alta/access/src/AvigilonAltaAccessClient.ts`.
 
 ```
 What's the difference between a vendor, a product, a suite, and a segment?
