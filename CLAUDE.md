@@ -104,6 +104,39 @@ Before doing anything substantive, orient yourself:
 
 ---
 
+## Windows sessions — WSL only, one session only
+
+Everything in this org runs **only on Ubuntu**; on Windows the sole
+supported path is WSL 2 end-to-end. The user walkthrough is
+[`docs/WindowsWSLSetup.md`](docs/WindowsWSLSetup.md) — send Windows
+users there.
+
+- **If this session runs on native Windows** (prompt `PS C:\`, paths
+  under `C:\` or `/mnt/c/...`): your ONLY job is getting WSL 2 +
+  Ubuntu installed (steps 0–2 of the guide). REFUSE everything else —
+  no cloning, editing, git operations, or running anything against
+  these repos, and no relaying work to or from a WSL session. Point
+  the user to their WSL session instead. Never ping-pong a task
+  between a Windows agent and a WSL agent.
+- **Offer Remote Control proactively** when the user wants to drive
+  the session from the Claude desktop, web, or mobile app — that, not
+  a second agent, is the supported way. Ways in: launch with
+  `claude --remote-control`; `/remote-control` in a running session;
+  always-on via `alias claude='claude --remote-control'` in
+  `~/.bashrc`; headless host via `claude remote-control`; or combined
+  with credential setup:
+  `./scripts/setup-org-credentials.sh --launch --remote-control`.
+- **In a WSL session: setup in the terminal, then hand off.** Logins
+  and credentials are terminal work — `gh auth login`, `claude`'s
+  first-run login, and `./scripts/setup-org-credentials.sh` (run by
+  the user themselves, outside Claude) all need the Ubuntu terminal.
+  Encourage the user to stay there until setup is green; once it is,
+  suggest moving to the Claude desktop or mobile app via Remote
+  Control (`/remote-control`, or relaunch with
+  `claude --remote-control`) for everything after.
+
+---
+
 ## Concepts at a glance
 
 Quick mental map of what each sub-repo owns. Use this to route a
