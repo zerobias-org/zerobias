@@ -47,10 +47,9 @@
 # Every zerobias-org content repo ships an IDENTICAL copy of this script at
 # scripts/setup-org-credentials.sh — deliberate duplication, kept in sync
 # (repos must never depend on the meta-repo). Copies live in: vendor,
-# suite, module, and the zerobias-org meta-repo (which runs it through a
-# cloned content repo's stack — see STACK_ROOT). After editing one: copy
-# to ALL, check `md5 -q` matches, and COMMIT in each repo — drift found
-# 2026-08-18 (module stale, suite copy on disk but never committed).
+# suite, product, module, and the zerobias-org meta-repo (which runs it
+# through a cloned content repo's stack — see STACK_ROOT). After editing
+# one: copy to ALL, check `md5 -q` matches, and COMMIT in each repo.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
