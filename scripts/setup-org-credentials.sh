@@ -20,11 +20,13 @@
 #                     NPM_CONFIG_TAG; DATALOADER_SERVICE_URL is deliberately
 #                     unset — the gate's Neon step needs its prod default)
 #   - ~/.npmrc       (pkg.zerobias.org scopes; authToken = ${ZB_TOKEN})
-#   - zb MCP profile (~/.config/mcp-zb/credentials.json via `zb setup`;
-#                     interpolates ${ZB_API_KEY})
+#   - zb MCP profile (~/.config/mcp-zb/credentials.json, written directly;
+#                     profile 'env' holds ${VAR} placeholders that zb
+#                     resolves from its process env at load time)
 # The MCPs themselves need NO registration — the repo ships .mcp.json with
-# ${ZB_ORG_ID}/${ZB_API_KEY} placeholders; export those in the shell that
-# launches claude (or use --launch, which exports everything for you).
+# ${ZB_ORG_ID}/${ZB_API_KEY} placeholders. Launch claude THROUGH THE SLOT
+# (--launch, or `zbb --slot <slot> exec claude` from a content-repo root)
+# and everything resolves from the slot env; no shell exports needed.
 #
 # Run this YOURSELF in a normal terminal so the API keys never enter a
 # Claude session. Env vars (SLOT, ZB_PLATFORM_URL, ZB_ORG_ID, ZB_API_KEY,
@@ -38,11 +40,13 @@
 # stripped), auto-verified against their target, and reused when they pass —
 # prompts appear only for keys no stored candidate can satisfy.
 #
-# `--launch [claude args…]`: after the setup is green, exec `claude` from
-# the repo root with ZB_ORG_ID/ZB_API_KEY/ZB_TOKEN/ZB_PLATFORM_URL exported
-# (read back from the slot). Everything after --launch is passed to claude,
-# so `--launch -p "make vendor x"` runs headless. (A child script can never
-# export into YOUR shell — launching claude as ITS child makes them stick.)
+# `--launch [claude args…]`: after the setup is green, exec `claude`
+# through `zbb --slot <slot> exec` from the repo root — zbb injects the
+# slot's env into claude, so .mcp.json and the zb profile resolve slot
+# creds; nothing is exported into YOUR shell. Only KNOWLEDGE_MCP_URL (the
+# per-env zb-knowledge endpoint — not a slot var) rides along. Everything
+# after --launch is passed to claude, so `--launch -p "make vendor x"`
+# runs headless.
 #
 # Every zerobias-org content repo ships an IDENTICAL copy of this script at
 # scripts/setup-org-credentials.sh — deliberate duplication, kept in sync
@@ -78,9 +82,10 @@ Options:
   --restore        Print export lines that restore your ORIGINAL shell
                    values from the newest backup this script stashed.
                    Use as:  eval "\$($0 --restore)"
-  --launch [args…] After setup is green, exec 'claude' from the stack root
-                   (= repo root; in the meta-repo: the borrowed content
-                   repo) with the slot creds exported and verified. Everything
+  --launch [args…] After setup is green, exec 'claude' through
+                   `zbb --slot <slot> exec` from the stack root (= repo
+                   root; in the meta-repo: the borrowed content repo) —
+                   claude sees the slot's creds, verified first. Everything
                    after --launch goes to claude, so a headless run is:
                    $0 --launch -p "make vendor x"
                    and a session with Remote Control active from the start:
@@ -127,43 +132,49 @@ fi
 slot_get() { # $1=var — never fails (unset var → empty; pipefail-safe)
   zbb --slot "$SLOT" env get "$1" 2>/dev/null | tail -n1 || true
 }
-# exec claude from the repo root with the creds exported (read back from the
-# slot — the values never pass through this script's prompts again). In a
-# single-key slot (no ZB_API_KEY stored) the org-key export mirrors ZB_TOKEN
-# so ${ZB_API_KEY} interpolations in .mcp.json / the zb profile still resolve.
+# Per-env knowledge-mcp endpoint derived from a platform URL ($1). Keys are
+# per-env and .mcp.json's zb-knowledge URL defaults to PROD — launching with
+# a non-prod key and no KNOWLEDGE_MCP_URL exported is a guaranteed 401 on
+# the zb-knowledge MCP at every session start.
+knowledge_url() { local h; h="${1#*://}"; h="${h%%/*}"; printf 'https://api.%s/knowledge-mcp/mcp' "$h"; }
+# exec claude THROUGH the slot: zbb injects the slot's stack env into
+# claude (cwd = STACK_ROOT provides the stack context), so .mcp.json
+# placeholders and the zb 'env' profile resolve slot creds. Only two vars
+# ride along as exports: KNOWLEDGE_MCP_URL (per-env, not a slot var) and —
+# on single-key slots with no stored ZB_API_KEY — a ZB_API_KEY mirror of
+# ZB_TOKEN so ${ZB_API_KEY} interpolations still resolve.
 launch_claude() {
   command -v claude >/dev/null || { say "✗ --launch: 'claude' not found on PATH."; exit 1; }
-  export ZB_ORG_ID="$(slot_get ZB_ORG_ID)"
-  export ZB_TOKEN="$(slot_get ZB_TOKEN)"
-  export ZB_PLATFORM_URL="$(slot_get ZB_PLATFORM_URL)"
-  local ak; ak="$(slot_get ZB_API_KEY)"
-  export ZB_API_KEY="${ak:-$ZB_TOKEN}"
+  local ak tok url
+  url="$(slot_get ZB_PLATFORM_URL)"
+  tok="$(slot_get ZB_TOKEN)"
+  ak="$(slot_get ZB_API_KEY)"; ak="${ak:-$tok}"
   # Final gate: NEVER exec claude on creds that are known-broken — a session
-  # launched with a dead key burns the whole run on confusing 401s (the exact
-  # values exported here shadow any good key in the user's shell/.zshrc).
-  if ! is_owner "$ZB_API_KEY"; then
+  # launched with a dead key burns the whole run on confusing 401s.
+  if ! is_owner "$ak"; then
     say "✗ --launch REFUSED: the slot's ZB_API_KEY fails the org-owner check"
-    say "  against $ZB_PLATFORM_URL (bad key, or platform unreachable)."
+    say "  against $url (bad key, or platform unreachable)."
     say "  Fix with: $0 --reconfigure"
     exit 1
   fi
-  if ! registry_ok "$ZB_TOKEN"; then
+  if ! registry_ok "$tok"; then
     say "✗ --launch REFUSED: the slot's ZB_TOKEN cannot read $REGISTRY_URL."
     say "  It must be a PROD-issued registry key. Fix with: $0 --reconfigure"
     exit 1
   fi
-  say "Launching claude from $STACK_ROOT (slot $SLOT creds exported + verified)…"
-  exec claude ${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}
+  export KNOWLEDGE_MCP_URL="$(knowledge_url "$url")"
+  export ZB_API_KEY="$ak"   # slot value (when set) overrides this on inject
+  say "Launching claude via slot $SLOT from $STACK_ROOT (creds verified)…"
+  exec zbb --slot "$SLOT" exec claude ${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}
 }
-# Run `zb status` with creds injected (needed once the profile holds ${VAR}
-# placeholders), show its output, and best-effort-confirm URL + org appear.
+# Run `zb status` with creds injected (the 'env' profile resolves its
+# ${VAR} placeholders from them) and require a REAL connection. `zb status`
+# exits 0 even when the connection FAILS — only the output tells.
 verify_zb() { # $1=url $2=org-key $3=org
   local out
   out=$(ZB_PLATFORM_URL="$1" ZB_API_KEY="$2" ZB_TOKEN="$2" ZB_ORG_ID="$3" zb status 2>&1) || return 1
   printf '%s\n' "$out" | sed 's/^/    /'
-  printf '%s' "$out" | grep -Eq "$1|$3" \
-    || say "  ⚠ could not confirm URL/org in zb status output — eyeball the lines above"
-  return 0
+  printf '%s' "$out" | grep -q 'Connected'
 }
 need=() # human-readable list of what was missing
 
@@ -409,9 +420,16 @@ $npmrc_ok || need+=("~/.npmrc scopes")
 
 zb_ok=false
 if command -v zb >/dev/null && $slot_ok; then
-  ZB_PLATFORM_URL="$slot_url" ZB_API_KEY="${slot_api_key:-$slot_token}" \
+  # zb status exits 0 even on a FAILED connection — check the output.
+  # Green needs BOTH: a real connection AND the ${VAR} placeholder marker
+  # (a legacy LITERAL-creds profile ignores the injected env entirely and
+  # may connect as some OTHER org — that must read as broken so Phase 3
+  # rewrites it, not as green).
+  zb_out=$(ZB_PLATFORM_URL="$slot_url" ZB_API_KEY="${slot_api_key:-$slot_token}" \
     ZB_TOKEN="${slot_api_key:-$slot_token}" ZB_ORG_ID="$slot_org" \
-    zb status >/dev/null 2>&1 && zb_ok=true
+    zb status 2>/dev/null || true)
+  printf '%s' "$zb_out" | grep -q 'Connected' \
+    && printf '%s' "$zb_out" | grep -q '\${ZB_API_KEY}' && zb_ok=true
 fi
 $zb_ok || need+=("zb MCP profile")
 
@@ -437,11 +455,11 @@ if $slot_ok && $npmrc_ok && $zb_ok && $owner_ok && $reg_ok && ! $RECONF; then
   say ""
   say "  Re-run with --reconfigure to change org / env / keys."
   if $LAUNCH; then launch_claude; fi
-  say "  Before launching claude, export in that shell (or re-run with --launch):"
-  say "    export ZB_ORG_ID=\"\$(zbb --slot $SLOT env get ZB_ORG_ID | tail -n1)\""
-  say "    export ZB_API_KEY=\"\$(zbb --slot $SLOT env get ZB_API_KEY | tail -n1)\""
-  say "    export ZB_TOKEN=\"\$(zbb --slot $SLOT env get ZB_TOKEN | tail -n1)\""
-  say "    export ZB_PLATFORM_URL=\"\$(zbb --slot $SLOT env get ZB_PLATFORM_URL | tail -n1)\""
+  say "  Launch claude with the slot's creds:"
+  say "    $0 --launch [claude args…]"
+  say "  or directly (from a content-repo root):"
+  say "    zbb --slot $SLOT exec claude"
+  say "    (non-prod target: first export KNOWLEDGE_MCP_URL=\"$(knowledge_url "$slot_url")\")"
   exit 0
 fi
 
@@ -579,29 +597,48 @@ if ! $npmrc_ok; then
 fi
 
 if ! $zb_ok || $RECONF; then
-  say "--- zb MCP profile (target: write-once interpolated profile 'env')"
+  say "--- zb MCP profile (write-once interpolated profile 'env')"
   command -v zb >/dev/null || ZB_TOKEN="$ZB_TOKEN" npm install -g @zerobias-com/zerobias-mcp
-  # Profile 'env' holds LITERAL ${VAR} placeholders (single-quoted on
-  # purpose — the zb MCP interpolates them from the environment at load
-  # time). The MCP login is a PLATFORM concern → it interpolates the ORG
-  # key (${ZB_API_KEY}). Values follow your shell exports forever; no
-  # re-setup on org switch. Verification with real creds injected proves
-  # interpolation works; on old zb versions it auth-fails → literal
-  # fallback below.
-  if printf '%s\n%s\n%s\n\n' '${ZB_PLATFORM_URL}' '${ZB_ORG_ID}' '${ZB_API_KEY}' | zb setup env >/dev/null 2>&1 \
-     && zb profile use env >/dev/null 2>&1 \
-     && verify_zb "$ZB_PLATFORM_URL" "$ZB_API_KEY" "$ZB_ORG_ID"; then
-    say "  zb profile 'env' active — values follow your shell exports."
-  else
-    say "  ⚠ this zb version doesn't interpolate \${VAR} yet (or piped setup"
-    say "    failed) — falling back to interactive setup with LITERAL values."
-    say "    Paste the ORG key at the API-key prompt. Re-run this script after"
-    say "    updating zb to get the write-once profile."
-    zb setup env || zb setup
-    zb profile use env >/dev/null 2>&1 || true
-    verify_zb "$ZB_PLATFORM_URL" "$ZB_API_KEY" "$ZB_ORG_ID" \
-      || { say "✗ zb cannot connect with the given URL/key/org — STOPPING."; exit 1; }
-  fi
+  # Profile 'env' stores LITERAL ${VAR} placeholder strings; zb resolves
+  # them from its process env at load time. The profile is written
+  # DIRECTLY (python3) — piping values into `zb setup` non-interactively
+  # exits 0 WITHOUT SAVING (its hidden API-key prompt needs a TTY), which
+  # silently left literal creds baked into profiles for months. With
+  # placeholders, whatever env claude is launched with (slot exec /
+  # --launch) is what zb uses; a shell with no ZB_* fails LOUD
+  # (MISSING_ENV_VAR) instead of silently using another org's key.
+  python3 - <<'PY'
+import json, os, pathlib
+f = pathlib.Path(os.path.expanduser('~/.config/mcp-zb/credentials.json'))
+f.parent.mkdir(parents=True, exist_ok=True)
+data = {}
+if f.exists():
+    try:
+        data = json.loads(f.read_text())
+    except Exception:
+        data = {}
+if not isinstance(data, dict):
+    data = {}
+data.setdefault('profiles', {})['env'] = {
+    'url': '${ZB_PLATFORM_URL}',
+    'org-id': '${ZB_ORG_ID}',
+    'api-key': '${ZB_API_KEY}',
+}
+data['active'] = 'env'
+tmp = f.with_name(f.name + '.tmp')
+tmp.write_text(json.dumps(data, indent=2) + '\n')
+os.chmod(tmp, 0o600)
+tmp.replace(f)
+PY
+  # Injected real creds prove this zb version resolves ${VAR} refs (a
+  # pre-placeholder zb would send the literal string and fail to connect).
+  verify_zb "$ZB_PLATFORM_URL" "$ZB_API_KEY" "$ZB_ORG_ID" \
+    || { say "✗ zb cannot connect through the placeholder profile."
+         say "  Likely an outdated zb — update it and re-run:"
+         say "    npm install -g @zerobias-com/zerobias-mcp@latest"
+         exit 1; }
+  say "  zb profile 'env' active — creds resolve from the launching env"
+  say "  (slot exec / --launch); shells without ZB_* fail loud by design."
 fi
 
 # ── Phase 4: verify the ORG key is an org OWNER (always, on final values)
@@ -629,11 +666,10 @@ fi
 
 say ""
 if $LAUNCH; then launch_claude; fi
-say "Done. Before launching claude (interactive or -p), export in that shell"
-say "(or re-run with --launch to have this script exec claude with them set):"
-say "  export ZB_ORG_ID=\"\$(zbb --slot $SLOT env get ZB_ORG_ID | tail -n1)\""
-say "  export ZB_API_KEY=\"\$(zbb --slot $SLOT env get ZB_API_KEY | tail -n1)\""
-say "  export ZB_TOKEN=\"\$(zbb --slot $SLOT env get ZB_TOKEN | tail -n1)\""
-say "  export ZB_PLATFORM_URL=\"\$(zbb --slot $SLOT env get ZB_PLATFORM_URL | tail -n1)\""
+say "Done. Launch claude with the slot's creds:"
+say "  $0 --launch [claude args…]"
+say "or directly (from a content-repo root):"
+say "  zbb --slot $SLOT exec claude"
+say "  (non-prod target: first export KNOWLEDGE_MCP_URL=\"$(knowledge_url "$(slot_get ZB_PLATFORM_URL)")\")"
 say "First interactive session per repo shows a one-time .mcp.json trust prompt;"
 say "headless runs load it without prompting."
