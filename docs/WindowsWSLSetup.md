@@ -178,10 +178,11 @@ the whole tail end for you. After the workspace bootstrap
 ./scripts/setup-org-credentials.sh --launch --remote-control
 ```
 
-It checks/stores your API keys (prompts show a masked `abc…xyz`
-preview and trim pasted whitespace), verifies them against the
-platform, then starts `claude` with the credentials exported and
-Remote Control already active — scan the QR (spacebar) or open
+It checks/stores your API keys in a zbb slot (prompts show a masked
+`abc…xyz` preview and trim pasted whitespace), verifies them against
+the platform, then starts `claude` through that slot — the session and
+its MCPs use the slot's identity — with Remote Control already
+active — scan the QR (spacebar) or open
 [https://claude.ai/code](https://claude.ai/code) and work from the
 Claude app. Everything after `--launch` is passed to `claude`, so any
 variant from this step works there too.

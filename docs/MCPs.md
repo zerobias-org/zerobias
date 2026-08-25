@@ -19,13 +19,22 @@ significantly faster.
 
 ## Shared prerequisites
 
+> **Recommended path — skip the manual steps below.** Run
+> `./scripts/setup-org-credentials.sh` (present in this meta-repo and
+> every content repo): it gathers your keys once, stores them in a
+> **zbb slot**, wires `~/.npmrc` and the zb profile, and verifies
+> everything. Then launch claude through the slot
+> (`--launch`, or `zbb --slot <slot> exec claude`) and both MCPs pick
+> up that identity. The sections below explain what the script sets
+> up, for understanding and troubleshooting.
+
 Both MCPs authenticate with the **same** ZeroBias credentials. Gather
 them once and you can configure either or both.
 
 1. **ZeroBias platform account** at
    [`app.zerobias.com`](https://app.zerobias.com).
-2. **API key + org ID**, generated from **Settings → API Keys**. Note
-   both values — you'll paste them into the setup commands below.
+2. **API key + org ID**, generated from **Settings → API Keys** of
+   the TARGET environment (keys are per-environment).
 3. **Claude Code** v2.0 or newer
    ([install instructions](https://docs.claude.com/en/docs/claude-code)).
 
@@ -36,21 +45,45 @@ them once and you can configure either or both.
 > `zb-knowledge` this caveat doesn't apply — the indexed code is
 > shared and the org ID only proves access; one profile is enough.
 
-### Scope: global vs project
+### Scope: repo templates first, user scope only as a template
 
-Both MCPs can be registered at one of two scopes when you run
-`claude mcp add`:
+**Inside the zerobias repos you don't register anything** — each repo
+ships a committed `.mcp.json` whose entries contain only `${VAR}`
+templates (no secrets):
 
-| Scope | Flag | Stored where | When to pick it |
-|-------|------|--------------|-----------------|
-| **Global (user)** | `-s user` | `~/.claude.json` | Personal dev machine, want the MCP in every project |
-| **Project-only** | *(default — no flag, or `-s local`)* | Per-project Claude state, **not committed** | Per-project credentials, or you don't want this MCP in unrelated projects |
+```json
+{
+  "mcpServers": {
+    "zb-knowledge": {
+      "type": "http",
+      "url": "${KNOWLEDGE_MCP_URL:-https://api.app.zerobias.com/knowledge-mcp/mcp}",
+      "headers": {
+        "dana-org-id": "${ZB_ORG_ID}",
+        "Authorization": "ApiKey ${ZB_API_KEY}"
+      }
+    },
+    "zb": { "command": "zb" }
+  }
+}
+```
 
-> Don't use `-s project` for these MCPs — that scope writes a
-> committed `.mcp.json` and would publish credentials to the repo.
+The variables resolve from the environment claude was **launched**
+with — which is why sessions are launched through a zbb slot. If you
+want the MCPs available in directories outside these repos, add a
+**user-scope** registration to `~/.claude.json` — but it MUST use the
+same template form (paste the JSON above under `mcpServers`).
 
-The commands below show the **global** form (`-s user`). Drop the
-`-s user` flag to install project-only instead.
+> ⚠️ **Never register with literal keys** (`claude mcp add … --header
+> "Authorization: ApiKey <real-key>"`). A baked literal key is
+> resolved instead of your slot's identity: sessions still connect,
+> but as whatever org the pasted key belongs to — silently. This
+> exact failure mode (a user-scope registration pinning every session
+> to a stale dev org) is why the template rule exists.
+
+Precedence when the same server name exists in several scopes:
+local (per-project state) > project (`.mcp.json`) > user
+(`~/.claude.json`). A stale local-scope registration shadows the
+repo's `.mcp.json` — remove it with `claude mcp remove <name>`.
 
 ---
 
@@ -75,42 +108,39 @@ the hosted endpoint directly.
 
 ### Setup
 
-Add the server with the Claude Code CLI — replace `<YOUR_ORG_ID>` and
-`<YOUR_API_KEY>` with the values from
-[Shared prerequisites](#shared-prerequisites). Drop `-s user` to
-install project-only instead of globally.
+**Nothing to do inside the zerobias repos** — the committed
+`.mcp.json` already declares `zb-knowledge` with `${VAR}` templates.
+Set up your slot with `./scripts/setup-org-credentials.sh`, then
+launch claude through it (`--launch`, or
+`zbb --slot <slot> exec claude`); the headers resolve from the slot's
+`ZB_ORG_ID` / `ZB_API_KEY`, and `KNOWLEDGE_MCP_URL` selects the
+per-env endpoint (`https://api.<env-host>/knowledge-mcp/mcp`; the
+template's default is prod — `--launch` exports the right one for
+non-prod targets automatically).
 
-```bash
-claude mcp add -s user --transport http \
-  zb-knowledge \
-  https://api.app.zerobias.com/knowledge-mcp/mcp \
-  --header "dana-org-id: <YOUR_ORG_ID>" \
-  --header "Authorization: ApiKey <YOUR_API_KEY>"
-```
-
-> ⚠️ Order matters: the server name and URL must come **before** the
-> `--header` flags. `--header` is variadic, so any positional argument
-> after it is parsed as an additional header value and the command
-> fails with `error: missing required argument 'name'`.
-
-Or, if you prefer to edit `~/.claude.json` directly:
+For coverage outside these repos, add the template form to
+`~/.claude.json` under `mcpServers` (see
+[Scope](#scope-repo-templates-first-user-scope-only-as-a-template) —
+never literal keys):
 
 ```json
 {
   "mcpServers": {
     "zb-knowledge": {
       "type": "http",
-      "url": "https://api.app.zerobias.com/knowledge-mcp/mcp",
+      "url": "${KNOWLEDGE_MCP_URL:-https://api.app.zerobias.com/knowledge-mcp/mcp}",
       "headers": {
-        "dana-org-id": "<YOUR_ORG_ID>",
-        "Authorization": "ApiKey <YOUR_API_KEY>"
+        "dana-org-id": "${ZB_ORG_ID}",
+        "Authorization": "ApiKey ${ZB_API_KEY}"
       }
     }
   }
 }
 ```
 
-Restart Claude Code after saving.
+Restart Claude Code after saving — env templates are resolved once at
+session startup, so the identity is whatever environment you launch
+claude with.
 
 ### Verify
 
@@ -185,8 +215,9 @@ agent can plan calls without first listing them.
 runs as a stdio MCP server.
 
 **1. Configure your `.npmrc`** for the `@zerobias-com` and
-`@zerobias-org` scopes (already covered for this meta-repo in
-[`RegistrySetup.md`](RegistrySetup.md); set `ZB_TOKEN` in your env):
+`@zerobias-org` scopes (`setup-org-credentials.sh` writes this;
+`ZB_TOKEN` comes from the slot at run time — background in
+[`RegistrySetup.md`](RegistrySetup.md)):
 
 ```ini
 @zerobias-com:registry=https://pkg.zerobias.org
@@ -202,75 +233,78 @@ npm install -g @zerobias-com/zerobias-mcp
 
 This installs the `zb` binary on your `$PATH`.
 
-**3. Configure credentials** — interactive prompts for URL, API key,
-org ID, profile name:
+**3. Configure credentials — the script does this.**
+`./scripts/setup-org-credentials.sh` writes the `env` profile into
+`~/.config/mcp-zb/credentials.json` holding **`${VAR}` placeholder
+strings** (`${ZB_PLATFORM_URL}` / `${ZB_ORG_ID}` / `${ZB_API_KEY}`)
+and activates it. zb resolves the placeholders from its process env
+at load time — so the identity is whatever slot you launch claude
+through. Manual equivalent: `zb setup env` interactively, entering
+the literal placeholder strings at each prompt (the prompts accept
+`${VAR_NAME}`; don't pipe them in — piped setup exits 0 without
+saving).
+
+**4. Verify the connection** — inject the slot env, since a bare
+shell has no creds by design:
 
 ```bash
-zb setup
-```
-
-Credentials are stored at `~/.config/mcp-zb/credentials.json` and
-support multiple profiles (e.g. `default`, `staging`).
-
-**4. Verify the connection:**
-
-```bash
-zb status
+zbb --slot <slot> exec zb status
 ```
 
 This authenticates against the platform and prints the active user
-and organization.
+and organization. A bare `zb status` reporting
+`(ZB_API_KEY: NOT SET)` is the expected loud failure, not a bug.
 
-**5. Register with Claude Code** (drop `-s user` for project-only):
+**5. Register with Claude Code** — nothing to do inside the zerobias
+repos (the committed `.mcp.json` declares `zb`). For other
+directories:
 
 ```bash
-claude mcp add -s user zerobias zb
+claude mcp add -s user zb zb
 ```
 
-The credentials configured by `zb setup` are read from
-`~/.config/mcp-zb/credentials.json` at runtime — they're the same
-ZeroBias API key + org ID used for `zb-knowledge`, so you don't need
-to gather them twice.
+No env stanza and no keys in the registration: zb inherits the
+launching environment and resolves the profile placeholders from it.
 
 ### Useful CLI commands
 
 ```bash
-zb setup              # configure credentials (first profile)
-zb status             # verify connection
-zb profile list       # list profiles
-zb profile add <name> # add another profile (another org / environment)
-zb profile use <name> # switch active profile
+zb setup              # configure credentials (script does this — see step 3)
+zbb --slot <slot> exec zb status   # verify connection (slot env injected)
+zb profile list       # list profiles ('env' with ${VAR} placeholders = active)
+zb profile add <name> # add a literal profile (legacy key storage)
+zb profile use <name> # switch active profile (avoid — pins every session)
 zb index              # force-regenerate the operation index
 zb cache              # show index cache info
 zb cache clear        # clear cached index
 zb update             # check for and install SDK updates
 ```
 
-### Multi-org access (zb profiles)
+### Multi-org access (zbb slots)
 
-`zb` reads credentials from a single active profile at a time. The
-profile chosen by `zb profile use` determines which org's data
-`zerobias_execute` can see — there's no `org_id` argument on the
-meta-tools.
-
-Typical multi-org setup:
+**One slot per org/env, chosen at launch time** — this is the
+mechanism, for both MCPs at once. `zerobias_execute` has no `org_id`
+argument; the session's whole identity comes from the environment
+claude was launched with:
 
 ```bash
-zb profile add prod-orgA      # prompts for orgA's URL / API key / org ID
-zb profile add prod-orgB      # prompts for orgB's URL / API key / org ID
-zb profile use prod-orgA      # work against orgA
-# … later …
-zb profile use prod-orgB      # switch to orgB
+./scripts/setup-org-credentials.sh         # run once per target (prompts env + org)
+zbb slot list                              # see your slots (<env>-<org-prefix>)
+zbb --slot prod-74fc0422 exec claude       # session as org A on prod
+zbb --slot qa-57c741cf   exec claude       # separate session as org B on qa
 ```
 
-Switching profiles takes effect for new MCP calls — there's no need
-to restart Claude Code, but a long-running session may still hold the
-previous SDK connection. If a recent call returns unexpected data,
-verify the active profile with `zb status`.
+Switching identity means **restarting claude through the other
+slot** — env templates and the zb profile placeholders are resolved
+once at session startup, so a running session never changes org
+mid-flight (a feature: no accidental cross-org calls).
 
-`zb-knowledge` is **not** affected by `zb profile`; its credentials
-live in `~/.claude.json` and authenticate against the shared code
-index, which doesn't differ by org.
+`zb profile use` is NOT the switching mechanism anymore: the active
+`env` profile deliberately contains `${VAR}` placeholders that follow
+the launch environment. Legacy literal profiles (`dev`, `qa`, …) may
+still exist in `~/.config/mcp-zb/credentials.json` as key storage,
+but activating one pins every session on this machine to that org —
+prefer slots.
 
 ### Response slimming
 
@@ -317,11 +351,16 @@ Slimmed result returned to Claude
 
 - **`zb` not found** — make sure `npm install -g` succeeded and your
   global npm `bin` is on `$PATH`.
-- **`zb status` shows auth failure** — confirm the API key and org
-  ID with `zb config`, regenerate the key from
-  [`app.zerobias.com`](https://app.zerobias.com) if needed.
-- **`/mcp` doesn't list zerobias** — confirm with
-  `claude mcp list`; re-run `claude mcp add -s user zerobias zb` if
-  it's missing, then restart Claude Code.
+- **`zb status` shows `(ZB_API_KEY: NOT SET)` / MISSING_ENV_VAR** —
+  expected in a bare shell: the `env` profile resolves from the
+  launching environment. Run it through the slot:
+  `zbb --slot <slot> exec zb status`. A real auth failure under the
+  slot means the slot's key is dead — re-run
+  `./scripts/setup-org-credentials.sh`.
+- **`/mcp` doesn't list zb** — inside the zerobias repos the
+  committed `.mcp.json` declares it (check the one-time trust
+  prompt wasn't declined); elsewhere confirm with `claude mcp list`
+  and re-run `claude mcp add -s user zb zb`, then restart Claude
+  Code.
 - **Operation not in the index** — the index regenerates when the SDK
   version changes. Force-refresh with `zb cache clear && zb index`.
