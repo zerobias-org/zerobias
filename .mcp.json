@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "zb-knowledge": {
+      "type": "http",
+      "url": "${KNOWLEDGE_MCP_URL:-https://api.app.zerobias.com/knowledge-mcp/mcp}",
+      "headers": {
+        "dana-org-id": "${ZB_ORG_ID}",
+        "Authorization": "ApiKey ${ZB_API_KEY}"
+      }
+    },
+    "zb": {
+      "command": "zb"
+    }
+  }
+}
