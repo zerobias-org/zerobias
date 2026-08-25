@@ -308,22 +308,23 @@ skills you can opt into.
 ### MCP servers
 
 Two optional ZeroBias MCP servers extend an agent's reach into the
-ecosystem. Both authenticate with the **same** ZeroBias API key + org
-ID (gather once, configure both) and can be installed **globally
-across all projects** or **only for this one**. The `zb` server is
-single-org by default; if you work across multiple orgs, add more
-profiles later via `zb profile add`. See
-[`docs/MCPs.md`](docs/MCPs.md) for full setup, the scope decision, and
-troubleshooting.
+ecosystem. Both are configured by the committed `.mcp.json` templates
+in this repo family and authenticate with whatever identity your
+**zbb slot** injects at launch — set up once with
+`./scripts/setup-org-credentials.sh`, then launch claude through the
+slot (`--launch`, or `zbb --slot <slot> exec claude`). Working across
+multiple orgs/envs means one slot each, picked at launch time. See
+[`docs/MCPs.md`](docs/MCPs.md) for full setup and troubleshooting.
 
 | Server | What it adds | Setup style |
 |--------|--------------|-------------|
-| **`zb-knowledge`** | Semantic code search + dependency / impact analysis across every indexed ZeroBias repo (`search_code`, `get_file`, `get_affected_files`, `get_dependency_chain`, `list_repos`, `check_package_versions`, `health_check`) | Hosted HTTP endpoint authenticated via Dana — `claude mcp add --transport http …` |
-| **`zb`** | Dynamic access to the entire ZeroBias platform SDK (~1,200 operations) via three meta-tools (`zerobias_search`, `zerobias_describe`, `zerobias_execute`) | Local npm package — `npm install -g @zerobias-com/zerobias-mcp` then `zb setup` |
+| **`zb-knowledge`** | Semantic code search + dependency / impact analysis across every indexed ZeroBias repo (`search_code`, `get_file`, `get_affected_files`, `get_dependency_chain`, `list_repos`, `check_package_versions`, `health_check`) | Hosted HTTP endpoint — the committed `.mcp.json` template; creds injected by your slot launch |
+| **`zb`** | Dynamic access to the entire ZeroBias platform SDK (~1,200 operations) via three meta-tools (`zerobias_search`, `zerobias_describe`, `zerobias_execute`) | Local npm package — `npm install -g @zerobias-com/zerobias-mcp`; creds resolve from the slot-launched env |
 
-Running Claude Code from this meta-repo? Just ask: *"set up the MCPs"*
-and Claude Code will check which (if any) are missing and walk you
-through `claude mcp add` for whichever scope you pick.
+Running Claude Code from this meta-repo? Run
+`./scripts/setup-org-credentials.sh --launch` — it stores your keys in
+a zbb slot, wires both MCPs, verifies against the platform, and
+launches claude with that identity.
 
 ---
 

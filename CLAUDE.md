@@ -188,31 +188,37 @@ Two ZeroBias MCP servers extend an agent's reach in this ecosystem.
 Both require a ZeroBias account; neither is guaranteed to be
 configured for the current user.
 
-**Check availability first.** Look at your tool list for the prefixes
-below. If either is missing, **proactively offer to install it** —
-don't silently work around it and don't fabricate tool calls. The
-offer should cover:
+**Check availability first — then diagnose the LAUNCH, not the
+registration.** Look at your tool list for the prefixes below. In
+these repos the MCPs are configured by committed `.mcp.json` files
+holding only `${VAR}` templates; credentials arrive from the
+environment claude was launched with (a **zbb slot**). So a missing
+tool, a 401, or a `MISSING_ENV_VAR` / `NOT SET` from `zb` almost
+always means the session wasn't launched through a slot — not that
+registration is missing. Don't silently work around it and don't
+fabricate tool calls. The fix, offered to the user:
 
-1. What the missing MCP adds (one-line summary of tools).
-2. **Scope choice** — project-only or global:
-   - **Global** (`claude mcp add -s user …`) — recommended for personal
-     dev machines; available in every project.
-   - **Project-only** (`claude mcp add …`, default scope) — stays
-     scoped to this repo; useful for shared / per-project credentials.
-3. **Shared credentials, with one caveat.** Both MCPs authenticate
-   with the **same** ZeroBias platform API key + org ID, generated
-   once from [`app.zerobias.com`](https://app.zerobias.com) →
-   Settings → API Keys. Tell the user they only need to gather creds
-   once even if they install both — *but* for `zb` specifically,
-   those creds scope data access to **that one org**. If the user
-   works across multiple orgs, mention that they can add more orgs
-   later as `zb` profiles (`zb profile add <name>` → `zb profile use
-   <name>`). `zb-knowledge` doesn't need profile switching — the
-   indexed code is shared and the org ID only proves access.
+1. **One-time per org/env:** the user runs
+   `./scripts/setup-org-credentials.sh` themselves in a normal
+   terminal (never inside a Claude session). It finds/creates the
+   slot, stores the keys, and wires `~/.npmrc` + the zb `env` profile
+   (`${VAR}` placeholders).
+2. **Relaunch through the slot:**
+   `./scripts/setup-org-credentials.sh --launch`, or
+   `zbb --slot <slot> exec claude` from a content-repo root.
 
-Then run the `claude mcp add` commands from
-[`docs/MCPs.md`](docs/MCPs.md) with the values the user provides
-(never invent placeholder values — ask).
+**Never register these MCPs with literal keys** (`claude mcp add`
+with a pasted key, at any scope): a baked key silently overrides the
+slot identity of every future session — it will connect, but as the
+wrong org. If the user wants user-scope coverage outside these repos,
+the registration must use the same `${VAR}` template form as the
+repos' `.mcp.json` (see [`docs/MCPs.md`](docs/MCPs.md)).
+
+**Multi-org / multi-env = one zbb slot each** (`<env>-<org-prefix>`);
+identity is chosen at launch time by picking the slot, and switching
+means restarting claude through the other slot (env is read once at
+startup). `zb profile` switching is NOT the mechanism — the active
+`env` profile deliberately follows the launch environment.
 
 ### `zb-knowledge` — semantic code search
 
