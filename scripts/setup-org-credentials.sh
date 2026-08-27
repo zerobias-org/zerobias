@@ -17,7 +17,9 @@
 #
 # Homes it manages:
 #   - zbb slot env   (ZB_API_KEY, ZB_TOKEN, ZB_ORG_ID, ZB_PLATFORM_URL,
-#                     NPM_CONFIG_TAG; DATALOADER_SERVICE_URL is deliberately
+#                     NPM_CONFIG_TAG — written to EVERY content stack in the
+#                     slot, since vars are stack-scoped and a slot alone holds
+#                     no user vars; DATALOADER_SERVICE_URL is deliberately
 #                     unset — the gate's Neon step needs its prod default)
 #   - ~/.npmrc       (pkg.zerobias.org scopes; authToken = ${ZB_TOKEN})
 #   - zb MCP profile (~/.config/mcp-zb/credentials.json, written directly;
@@ -25,8 +27,10 @@
 #                     resolves from its process env at load time)
 # The MCPs themselves need NO registration — the repo ships .mcp.json with
 # ${ZB_ORG_ID}/${ZB_API_KEY} placeholders. Launch claude THROUGH THE SLOT
-# (--launch, or `zbb --slot <slot> exec claude` from a content-repo root)
-# and everything resolves from the slot env; no shell exports needed.
+# WITH A STACK (--launch, or `zbb --slot <slot> --stack <stack> exec claude`
+# from any directory) and everything resolves from the stack env. NEVER omit
+# the stack: a slot alone injects only ZB_SLOT* identity vars, so a stackless
+# launch gets no creds and every MCP fails at session start.
 #
 # Run this YOURSELF in a normal terminal so the API keys never enter a
 # Claude session. Env vars (SLOT, ZB_PLATFORM_URL, ZB_ORG_ID, ZB_API_KEY,
@@ -41,8 +45,8 @@
 # prompts appear only for keys no stored candidate can satisfy.
 #
 # `--launch [claude args…]`: after the setup is green, exec `claude`
-# through `zbb --slot <slot> exec` from the repo root — zbb injects the
-# slot's env into claude, so .mcp.json and the zb profile resolve slot
+# through `zbb --slot <slot> --stack <stack> exec` — zbb injects the
+# stack's env into claude, so .mcp.json and the zb profile resolve slot
 # creds; nothing is exported into YOUR shell. Only KNOWLEDGE_MCP_URL (the
 # per-env zb-knowledge endpoint — not a slot var) rides along. Everything
 # after --launch is passed to claude, so `--launch -p "make vendor x"`
@@ -57,16 +61,33 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-# zbb needs an added-stack cwd — outside one, `env get/set` fail (get exits
-# 1 with EMPTY output, indistinguishable from unset). In content repos the
-# repo root IS the stack; the meta-repo has no zbb.yaml at its root, so its
-# copy borrows the first cloned content repo's stack.
-STACK_ROOT=""
-for d in "$REPO_ROOT" "$REPO_ROOT/vendor" "$REPO_ROOT/suite" "$REPO_ROOT/module"; do
-  [ -f "$d/zbb.yaml" ] && { STACK_ROOT="$d"; break; }
+# zbb needs a stack context for env get/set — outside one, `env get` exits
+# 1 with EMPTY output, indistinguishable from unset. Vars are STACK-scoped:
+# a slot alone injects only its ZB_SLOT* identity vars, so every content
+# stack gets the SAME connection creds (no slot+stack pair may drift). In
+# content repos the repo root IS the (only) stack; the meta-repo ships an
+# env-only zbb.yaml at its root (stack "zerobias-org" — exists precisely so
+# meta-root launches have a stack context) and additionally seeds every
+# cloned content repo's stack.
+STACK_ROOT=""; STACK_DIRS=()
+for d in "$REPO_ROOT" "$REPO_ROOT/vendor" "$REPO_ROOT/suite" "$REPO_ROOT/product" "$REPO_ROOT/module"; do
+  [ -f "$d/zbb.yaml" ] || continue
+  STACK_DIRS+=("$d")
+  [ -n "$STACK_ROOT" ] || STACK_ROOT="$d"
 done
-[ -n "$STACK_ROOT" ] || { printf 'No zbb.yaml at %s (or vendor/ suite/ module/ under it).\nRun from a content repo, or clone them first (scripts/clone-all.sh).\n' "$REPO_ROOT" >&2; exit 1; }
-cd "$STACK_ROOT"   # zbb resolves the stack context from cwd
+[ -n "$STACK_ROOT" ] || { printf 'No zbb.yaml at %s (or vendor/ suite/ product/ module/ under it).\nRun from a content repo, or clone them first (scripts/clone-all.sh).\n' "$REPO_ROOT" >&2; exit 1; }
+cd "$STACK_ROOT"   # zbb resolves the primary stack context from cwd
+# Short stack name (e.g. "product" from "@zerobias-org/product"), embedded in
+# the launch exec and printed commands so they work from ANY directory — a
+# stackless `zbb --slot X exec claude` from a non-stack cwd silently launches
+# a session with NO creds and dead MCPs.
+stack_short_name() { # $1=repo dir with zbb.yaml → short stack name
+  local n
+  n="$(sed -n 's/^name:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' "$1/zbb.yaml" | head -n1)"
+  printf '%s' "${n##*/}"
+}
+STACK_NAME="$(stack_short_name "$STACK_ROOT")"
+[ -n "$STACK_NAME" ] || { printf 'Cannot read stack name from %s/zbb.yaml\n' "$STACK_ROOT" >&2; exit 1; }
 
 usage() {
   cat <<EOF
@@ -164,8 +185,8 @@ launch_claude() {
   fi
   export KNOWLEDGE_MCP_URL="$(knowledge_url "$url")"
   export ZB_API_KEY="$ak"   # slot value (when set) overrides this on inject
-  say "Launching claude via slot $SLOT from $STACK_ROOT (creds verified)…"
-  exec zbb --slot "$SLOT" exec claude ${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}
+  say "Launching claude via slot $SLOT, stack $STACK_NAME (creds verified)…"
+  exec zbb --slot "$SLOT" --stack "$STACK_NAME" exec claude ${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}
 }
 # Run `zb status` with creds injected (the 'env' profile resolves its
 # ${VAR} placeholders from them) and require a REAL connection. `zb status`
@@ -411,6 +432,15 @@ if zbb slot list 2>/dev/null | grep -q "$SLOT"; then
   slot_org=$(slot_get ZB_ORG_ID || true)
   slot_url=$(slot_get ZB_PLATFORM_URL || true)
   [ -n "$slot_token" ] && [ -n "$slot_org" ] && [ -n "$slot_url" ] && slot_ok=true
+  # green also requires EVERY content stack to be seeded — a repo cloned
+  # after the last run has an unseeded stack that would silently launch
+  # cred-less sessions.
+  if $slot_ok; then
+    for d in ${STACK_DIRS[@]+"${STACK_DIRS[@]}"}; do
+      [ -n "$(zbb --slot "$SLOT" --stack "$(stack_short_name "$d")" env get ZB_ORG_ID 2>/dev/null | tail -n1)" ] \
+        || { slot_ok=false; break; }
+    done
+  fi
 fi
 $slot_ok || need+=("slot env ($SLOT)")
 
@@ -457,8 +487,9 @@ if $slot_ok && $npmrc_ok && $zb_ok && $owner_ok && $reg_ok && ! $RECONF; then
   if $LAUNCH; then launch_claude; fi
   say "  Launch claude with the slot's creds:"
   say "    $0 --launch [claude args…]"
-  say "  or directly (from a content-repo root):"
-  say "    zbb --slot $SLOT exec claude"
+  say "  or directly (works from any directory — never omit --stack: without it"
+  say "  the session gets NO creds and the MCPs fail):"
+  say "    zbb --slot $SLOT --stack $STACK_NAME exec claude"
   say "    (non-prod target: first export KNOWLEDGE_MCP_URL=\"$(knowledge_url "$slot_url")\")"
   exit 0
 fi
@@ -569,26 +600,34 @@ fi
 if ! $slot_ok || ! $owner_ok || ! $reg_ok || $RECONF; then
   say "--- slot env ($SLOT)"
   zbb slot list 2>/dev/null | grep -q "$SLOT" || zbb slot create "$SLOT"
-  # the repo's env vars are STACK-level — the stack must be in the slot
-  # before `env set` can attach them ("no stack context" otherwise).
+  # the repo's env vars are STACK-level — each stack must be in the slot
+  # before `env set` can attach them ("no stack context" otherwise). The
+  # SAME creds go to EVERY content stack so no slot+stack pair drifts.
   # "already exists" is fine; any other add-failure is fatal.
-  if ! out=$(zbb --slot "$SLOT" stack add "$STACK_ROOT" 2>&1); then
-    printf '%s\n' "$out" | grep -qi "already exists" \
-      || { printf '%s\n' "$out"; say "✗ stack add failed — STOPPING."; exit 1; }
-  fi
-  zbb --slot "$SLOT" env set ZB_API_KEY "$ZB_API_KEY" >/dev/null
-  say "  ZB_API_KEY stored (value not shown)"
-  zbb --slot "$SLOT" env set ZB_TOKEN "$ZB_TOKEN" >/dev/null
-  say "  ZB_TOKEN stored (value not shown)"
-  zbb --slot "$SLOT" env set ZB_ORG_ID "$ZB_ORG_ID"
-  zbb --slot "$SLOT" env set ZB_PLATFORM_URL "$ZB_PLATFORM_URL"
-  # DATALOADER_SERVICE_URL is intentionally NOT set: the gate's Neon step
-  # auths with the prod-issued ZB_TOKEN against its prod default
-  # (app.zerobias.com/api/dataloader) even for non-prod org targets — a
-  # per-env override makes the prod key 401. The org load never reads it
-  # (it uses ZB_PLATFORM_URL + ZB_API_KEY). Clear any stale override.
-  zbb --slot "$SLOT" env unset DATALOADER_SERVICE_URL >/dev/null 2>&1 || true
-  zbb --slot "$SLOT" env set NPM_CONFIG_TAG dev
+  for d in ${STACK_DIRS[@]+"${STACK_DIRS[@]}"}; do
+    if ! out=$(zbb --slot "$SLOT" stack add "$d" 2>&1); then
+      printf '%s\n' "$out" | grep -qi "already exists" \
+        || { printf '%s\n' "$out"; say "✗ stack add $d failed — STOPPING."; exit 1; }
+    fi
+    sname="$(stack_short_name "$d")"
+    zbb --slot "$SLOT" --stack "$sname" env set ZB_API_KEY "$ZB_API_KEY" >/dev/null
+    zbb --slot "$SLOT" --stack "$sname" env set ZB_TOKEN "$ZB_TOKEN" >/dev/null
+    zbb --slot "$SLOT" --stack "$sname" env set ZB_ORG_ID "$ZB_ORG_ID" >/dev/null
+    zbb --slot "$SLOT" --stack "$sname" env set ZB_PLATFORM_URL "$ZB_PLATFORM_URL" >/dev/null
+    # DATALOADER_SERVICE_URL is intentionally NOT set: the gate's Neon step
+    # auths with the prod-issued ZB_TOKEN against its prod default
+    # (app.zerobias.com/api/dataloader) even for non-prod org targets — a
+    # per-env override makes the prod key 401. The org load never reads it
+    # (it uses ZB_PLATFORM_URL + ZB_API_KEY). Clear any stale override.
+    zbb --slot "$SLOT" --stack "$sname" env unset DATALOADER_SERVICE_URL >/dev/null 2>&1 || true
+    zbb --slot "$SLOT" --stack "$sname" env set NPM_CONFIG_TAG dev >/dev/null
+    # Per-env zb-knowledge endpoint (keys are per-env; .mcp.json's default
+    # is PROD). Declared so far only in the meta stack's zbb.yaml —
+    # `env set` is a silent no-op on stacks that don't declare it, so this
+    # is safe everywhere and starts sticking once a repo declares the var.
+    zbb --slot "$SLOT" --stack "$sname" env set KNOWLEDGE_MCP_URL "$(knowledge_url "$ZB_PLATFORM_URL")" >/dev/null 2>&1 || true
+    say "  stack $sname: ZB_API_KEY + ZB_TOKEN + ZB_ORG_ID + ZB_PLATFORM_URL + NPM_CONFIG_TAG stored (values not shown)"
+  done
 fi
 
 if ! $npmrc_ok; then
@@ -668,8 +707,9 @@ say ""
 if $LAUNCH; then launch_claude; fi
 say "Done. Launch claude with the slot's creds:"
 say "  $0 --launch [claude args…]"
-say "or directly (from a content-repo root):"
-say "  zbb --slot $SLOT exec claude"
+say "or directly (works from any directory — never omit --stack: without it"
+say "the session gets NO creds and the MCPs fail):"
+say "  zbb --slot $SLOT --stack $STACK_NAME exec claude"
 say "  (non-prod target: first export KNOWLEDGE_MCP_URL=\"$(knowledge_url "$(slot_get ZB_PLATFORM_URL)")\")"
 say "First interactive session per repo shows a one-time .mcp.json trust prompt;"
 say "headless runs load it without prompting."

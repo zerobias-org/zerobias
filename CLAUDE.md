@@ -274,6 +274,27 @@ publish / dataloader / slot workflows in `module/`, `vendor/`,
 `suite/`, `product/`, `collectorbot/`, `schema/`. The sub-repo's own
 docs assume `zbb` is on the user's `$PATH`.
 
+> **Slot/stack env model — never omit the stack.** A **slot** is an
+> isolated environment instance (ports, generated secrets, docker
+> namespace) but holds NO user env vars of its own — only seven
+> `ZB_SLOT*` identity vars. Every real var (credentials included) is
+> **stack-scoped**, stored per stack inside the slot
+> (`~/.zbb/slots/<slot>/stacks/<stack>/.env`); the same var can hold
+> different values in different stacks of one slot. A `zbb` command
+> only sees those vars with a **stack context**: `cd` into a repo with
+> a `zbb.yaml`, or pass `--stack <short-name>` (e.g. `product`), or
+> export `ZB_STACK`. The meta-repo root ships an env-only `zbb.yaml`
+> (stack `zerobias-org`) precisely so cwd inference works here too:
+> once `scripts/setup-org-credentials.sh` has seeded the slot,
+> `zbb --slot <slot> exec claude` from the meta-root injects the
+> credentials and the ZeroBias MCPs connect. From any directory
+> WITHOUT a `zbb.yaml`, ALWAYS pass `--stack` — a stackless launch
+> silently gets no credentials and every ZeroBias MCP fails at
+> session start. Universal form:
+> `zbb --slot <slot> --stack <stack> exec claude` (add `--continue`
+> to resume a session under a different slot — sessions are keyed by
+> working directory, not by slot).
+
 **Check:**
 
 ```bash
