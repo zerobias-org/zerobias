@@ -61,10 +61,23 @@ Requires `zbb` (see [Install `zbb`](#install-zbb) below):
 ```
 
 It's check-first and safe to re-run: it finds or creates your slot
-(canonically named `<env>-<org-prefix>`, e.g. `prod-74fc0422`), stores
-the keys there, wires `~/.npmrc` and the zb MCP profile (as `${VAR}`
-placeholders that resolve from the launching env), and verifies
-everything against the platform. It prompts only for what's missing.
+(canonically named after the org slug — `zerobias` for prod, prefixed
+`ci-undefined` for any other env), stores the keys there, wires
+`~/.npmrc` and the zb MCP profile (as `${VAR}` placeholders that
+resolve from the launching env), and verifies everything against the
+platform. It prompts only for what's missing.
+
+Need a second identity for the same org (another API key), or a slot
+name of your own? Preset `SLOT` — it skips the reuse of an existing
+matching slot:
+
+```bash
+SLOT=zerobias-admin ZB_API_KEY=<other-key> ./scripts/setup-org-credentials.sh
+```
+
+Each identity lives in its own slot; you pick one at launch with
+`--slot`. With several slots holding the same org, always name the
+slot explicitly — auto-reuse takes the first match it finds.
 
 **3. Launch Claude Code through the slot** — this is what makes the
 MCPs (and npm, gates, publishes) use those creds:

@@ -293,7 +293,12 @@ docs assume `zbb` is on the user's `$PATH`.
 > session start. Universal form:
 > `zbb --slot <slot> --stack <stack> exec claude` (add `--continue`
 > to resume a session under a different slot — sessions are keyed by
-> working directory, not by slot).
+> working directory, not by slot). One slot per identity: a second
+> API key for the same org gets its own named slot —
+> `SLOT=<name> ZB_API_KEY=<other-key> ./scripts/setup-org-credentials.sh`
+> (a preset `SLOT` skips slot reuse). With several slots holding one
+> org, always pass `--slot` explicitly; auto-reuse takes the first
+> match.
 
 **Check:**
 
