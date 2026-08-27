@@ -114,7 +114,16 @@ Options:
   -h, --help       Show this help.
 
 Env vars pre-seed the prompts (each one set = one prompt skipped):
-  SLOT              zbb slot name (default: reuse/create <env>-<org first 8>)
+  SLOT              zbb slot name. Preset it to FORCE this exact slot (the
+                    reuse-by-content scan is skipped) — e.g. a second
+                    identity for the same org lives in its own named slot:
+                      SLOT=zerobias-admin ZB_API_KEY=<other-key> $0
+                    Default: reuse any slot already holding the target
+                    org/env; else create '<org-slug>' (prod) /
+                    '<env>-<org-slug>' (other envs). With several slots
+                    for one org, always pick explicitly (SLOT= here,
+                    --slot at launch) — the reuse scan takes the first
+                    match it finds.
   ZB_PLATFORM_URL   target platform, e.g. https://app.zerobias.com/api
   ZB_ORG_ID         target org UUID (prompt also accepts the org NAME)
   ZB_API_KEY        ORG key — org-OWNER API key of the TARGET env
