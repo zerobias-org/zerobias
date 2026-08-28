@@ -17,10 +17,17 @@
 #
 # Homes it manages:
 #   - zbb slot env   (ZB_API_KEY, ZB_TOKEN, ZB_ORG_ID, ZB_PLATFORM_URL,
-#                     NPM_CONFIG_TAG — written to EVERY content stack in the
-#                     slot, since vars are stack-scoped and a slot alone holds
-#                     no user vars; DATALOADER_SERVICE_URL is deliberately
-#                     unset — the gate's Neon step needs its prod default)
+#                     KNOWLEDGE_MCP_URL, NPM_CONFIG_TAG — written ONCE to the
+#                     shared `dev` stack (@zerobias-org/dev-stack, added to
+#                     the slot if missing); every content stack IMPORTS them
+#                     from there (depends/imports in its zbb.yaml), so there
+#                     is exactly one copy per slot and rotation propagates.
+#                     Stale per-stack overrides from the pre-dev-stack model
+#                     are cleared (an override shadows the import — zbb never
+#                     clobbers user overrides). Content stacks on OUTDATED
+#                     checkouts (no imports yet) still get direct seeding.
+#                     DATALOADER_SERVICE_URL is deliberately unset — the
+#                     gate's Neon step needs its prod default)
 #   - ~/.npmrc       (pkg.zerobias.org scopes; authToken = ${ZB_TOKEN})
 #   - zb MCP profile (~/.config/mcp-zb/credentials.json, written directly;
 #                     profile 'env' holds ${VAR} placeholders that zb
@@ -114,7 +121,16 @@ Options:
   -h, --help       Show this help.
 
 Env vars pre-seed the prompts (each one set = one prompt skipped):
-  SLOT              zbb slot name (default: reuse/create <env>-<org first 8>)
+  SLOT              zbb slot name. Preset it to FORCE this exact slot (the
+                    reuse-by-content scan is skipped) — e.g. a second
+                    identity for the same org lives in its own named slot:
+                      SLOT=zerobias-admin ZB_API_KEY=<other-key> $0
+                    Default: reuse any slot already holding the target
+                    org/env; else create '<org-slug>' (prod) /
+                    '<env>-<org-slug>' (other envs). With several slots
+                    for one org, always pick explicitly (SLOT= here,
+                    --slot at launch) — the reuse scan takes the first
+                    match it finds.
   ZB_PLATFORM_URL   target platform, e.g. https://app.zerobias.com/api
   ZB_ORG_ID         target org UUID (prompt also accepts the org NAME)
   ZB_API_KEY        ORG key — org-OWNER API key of the TARGET env
@@ -138,6 +154,24 @@ STAMP=$(date +%Y_%m_%d)
 BACKUP_DIR="$HOME/.config/zb-secrets-backup"
 LAST_TARGET_FILE="$BACKUP_DIR/last-target"
 REGISTRY_URL="https://pkg.zerobias.org"
+# The shared dev stack — single home of the connection creds in a slot.
+# Content stacks import from it (see their zbb.yaml depends/imports).
+DEV_STACK_SPEC="@zerobias-org/dev-stack@^1.0.0"
+DEV_VARS="ZB_API_KEY ZB_TOKEN ZB_ORG_ID ZB_PLATFORM_URL KNOWLEDGE_MCP_URL NPM_CONFIG_TAG"
+dev_stack_present() { [ -f "$HOME/.zbb/slots/$SLOT/stacks/dev/stack.yaml" ]; }
+repo_imports_dev() { grep -q 'dev-stack' "$1/zbb.yaml" 2>/dev/null; }
+# A per-stack override left by the OLD per-stack seeding model shadows the
+# import forever (zbb never clobbers overrides) — detect it in the stack's
+# manifest so phase 3 clears it.
+stack_has_stale_override() { # $1=stack short name
+  local m="$HOME/.zbb/slots/$SLOT/stacks/$1/manifest.yaml" v
+  [ -f "$m" ] || return 1
+  for v in $DEV_VARS; do
+    awk -v v="$v" '$0 ~ "^"v":" {f=1; next} /^[^ ]/ {f=0} f && /resolution: override/ {found=1} END {exit !found}' "$m" \
+      && return 0
+  done
+  return 1
+}
 
 # --restore: emit export lines that put the ORIGINAL values back, from the
 # newest backup this script wrote. Use as:  eval "$(./scripts/setup-org-credentials.sh --restore)"
@@ -387,7 +421,20 @@ fi
 if [ -z "${SLOT:-}" ]; then
   host=${ZB_PLATFORM_URL#*://}; host=${host%%/*}; envlabel=${host%%.*}
   [ "$envlabel" = "app" ] && envlabel=prod
-  SLOT="${envlabel}-$(printf '%.8s' "$ZB_ORG_ID")"
+  # Slot names use the org SLUG ('undefined', 'ci-undefined'), falling back
+  # to the UUID prefix when no key can list orgs. PROD gets NO env prefix —
+  # the common case reads as just the org; every other env keeps '<env>-'.
+  # Existing slots keep working whatever their name: the reuse-by-content
+  # scan above matches on stored org/env, never on the name.
+  orgtag=""
+  if rows=$(org_rows 2>/dev/null); then
+    orgtag=$(printf '%s\n' "$rows" \
+      | awk -F'\t' -v id="$ZB_ORG_ID" '$1==id {print ($3!="" ? $3 : $2); exit}' \
+      | tr '[:upper:]' '[:lower:]' | LC_ALL=C tr -c 'a-z0-9\n' '-' \
+      | sed 's/--*/-/g; s/^-//; s/-$//')
+  fi
+  [ -n "$orgtag" ] || orgtag=$(printf '%.8s' "$ZB_ORG_ID")
+  if [ "$envlabel" = "prod" ]; then SLOT="$orgtag"; else SLOT="${envlabel}-${orgtag}"; fi
   say "Using canonical slot '$SLOT' for this org/env (will create if absent)."
 fi
 # Remember this target (incl. org NAME) — next run's Enter-to-keep default.
@@ -432,13 +479,25 @@ if zbb slot list 2>/dev/null | grep -q "$SLOT"; then
   slot_org=$(slot_get ZB_ORG_ID || true)
   slot_url=$(slot_get ZB_PLATFORM_URL || true)
   [ -n "$slot_token" ] && [ -n "$slot_org" ] && [ -n "$slot_url" ] && slot_ok=true
-  # green also requires EVERY content stack to be seeded — a repo cloned
-  # after the last run has an unseeded stack that would silently launch
-  # cred-less sessions.
+  # green also requires EVERY content stack to resolve the creds — a repo
+  # cloned after the last run has an unseeded stack that would silently
+  # launch cred-less sessions. (On imports-model checkouts the value
+  # resolves transitively from the dev stack, so this check covers both.)
   if $slot_ok; then
     for d in ${STACK_DIRS[@]+"${STACK_DIRS[@]}"}; do
-      [ -n "$(zbb --slot "$SLOT" --stack "$(stack_short_name "$d")" env get ZB_ORG_ID 2>/dev/null | tail -n1)" ] \
+      sname="$(stack_short_name "$d")"
+      [ -n "$(zbb --slot "$SLOT" --stack "$sname" env get ZB_ORG_ID 2>/dev/null | tail -n1)" ] \
         || { slot_ok=false; break; }
+      # imports-model repos: green ALSO means the dev stack holds the creds
+      # and no stale per-stack override (old seeding model) shadows them —
+      # a shadowed import looks fine today but silently stops tracking the
+      # dev stack on the next rotation.
+      if repo_imports_dev "$d"; then
+        { dev_stack_present \
+            && [ -n "$(zbb --slot "$SLOT" --stack dev env get ZB_ORG_ID 2>/dev/null | tail -n1)" ] \
+            && ! stack_has_stale_override "$sname"; } \
+          || { slot_ok=false; break; }
+      fi
     done
   fi
 fi
@@ -490,7 +549,9 @@ if $slot_ok && $npmrc_ok && $zb_ok && $owner_ok && $reg_ok && ! $RECONF; then
   say "  or directly (works from any directory — never omit --stack: without it"
   say "  the session gets NO creds and the MCPs fail):"
   say "    zbb --slot $SLOT --stack $STACK_NAME exec claude"
-  say "    (non-prod target: first export KNOWLEDGE_MCP_URL=\"$(knowledge_url "$slot_url")\")"
+  say "  creds-only session from anywhere (no repo checkout; MCPs only — repo"
+  say "  gates need the repo's own stack):"
+  say "    zbb --slot $SLOT --stack dev exec claude"
   exit 0
 fi
 
@@ -541,7 +602,7 @@ if ! $RECONF; then
   # while the good one sat one candidate away).
   reg_srcs=("your shell env" "the slot"); reg_vals=("${ZB_TOKEN:-}" "$slot_token")
   for f in $(ls -t "$BACKUP_DIR"/*.env 2>/dev/null); do
-    v=$(sed -n 's/^export ZB_TOKEN=//p' "$f" | tail -n1) || true
+    v=$(LC_ALL=C sed -n 's/^export ZB_TOKEN=//p' "$f" | tail -n1) || true
     [ -n "$v" ] || continue
     eval "v=$v"   # stash() wrote %q-quoted values; unquote
     reg_srcs+=("stashed original ${f##*/}"); reg_vals+=("$v")
@@ -600,33 +661,78 @@ fi
 if ! $slot_ok || ! $owner_ok || ! $reg_ok || $RECONF; then
   say "--- slot env ($SLOT)"
   zbb slot list 2>/dev/null | grep -q "$SLOT" || zbb slot create "$SLOT"
-  # the repo's env vars are STACK-level — each stack must be in the slot
-  # before `env set` can attach them ("no stack context" otherwise). The
-  # SAME creds go to EVERY content stack so no slot+stack pair drifts.
-  # "already exists" is fine; any other add-failure is fatal.
+
+  # ── The shared dev stack: the ONE home of the connection creds ───────
+  # Content stacks import from it (zbb.yaml depends/imports — same
+  # pattern hub/platform use to inherit Dana's env), so seeding happens
+  # exactly once per slot and rotation propagates everywhere. Ensure it
+  # is in the slot (npm-pulled; ZB_TOKEN passed inline so ~/.npmrc's
+  # ${ZB_TOKEN} interpolation resolves for the pull).
+  if ! dev_stack_present; then
+    if out=$(ZB_TOKEN="$ZB_TOKEN" zbb --slot "$SLOT" stack add "$DEV_STACK_SPEC" 2>&1); then
+      say "  dev stack added ($DEV_STACK_SPEC)"
+    else
+      printf '%s\n' "$out" | tail -n2 | sed 's/^/    /'
+      say "  ⚠ could not add the shared dev stack — imports-model repos won't"
+      say "    resolve creds until it can be added; direct seeding below still"
+      say "    covers outdated checkouts."
+    fi
+  fi
+  if dev_stack_present; then
+    for kv in \
+      "ZB_API_KEY=$ZB_API_KEY" "ZB_TOKEN=$ZB_TOKEN" "ZB_ORG_ID=$ZB_ORG_ID" \
+      "ZB_PLATFORM_URL=$ZB_PLATFORM_URL" \
+      "KNOWLEDGE_MCP_URL=$(knowledge_url "$ZB_PLATFORM_URL")" \
+      "NPM_CONFIG_TAG=dev"; do
+      zbb --slot "$SLOT" --stack dev env set "${kv%%=*}" "${kv#*=}" >/dev/null \
+        || { say "✗ could not store ${kv%%=*} on the dev stack — STOPPING."; exit 1; }
+    done
+    say "  dev stack: ZB_API_KEY + ZB_TOKEN + ZB_ORG_ID + ZB_PLATFORM_URL + KNOWLEDGE_MCP_URL + NPM_CONFIG_TAG stored (values not shown)"
+  fi
+
+  # Each content repo's stack must be in the slot ("no stack context"
+  # otherwise; the add also auto-pulls the dev dependency for
+  # imports-model checkouts). "already exists" is fine; any other
+  # add-failure is fatal.
   for d in ${STACK_DIRS[@]+"${STACK_DIRS[@]}"}; do
-    if ! out=$(zbb --slot "$SLOT" stack add "$d" 2>&1); then
+    if ! out=$(ZB_TOKEN="$ZB_TOKEN" zbb --slot "$SLOT" stack add "$d" 2>&1); then
       printf '%s\n' "$out" | grep -qi "already exists" \
         || { printf '%s\n' "$out"; say "✗ stack add $d failed — STOPPING."; exit 1; }
     fi
     sname="$(stack_short_name "$d")"
-    zbb --slot "$SLOT" --stack "$sname" env set ZB_API_KEY "$ZB_API_KEY" >/dev/null
-    zbb --slot "$SLOT" --stack "$sname" env set ZB_TOKEN "$ZB_TOKEN" >/dev/null
-    zbb --slot "$SLOT" --stack "$sname" env set ZB_ORG_ID "$ZB_ORG_ID" >/dev/null
-    zbb --slot "$SLOT" --stack "$sname" env set ZB_PLATFORM_URL "$ZB_PLATFORM_URL" >/dev/null
+    if repo_imports_dev "$d" && dev_stack_present; then
+      # imports model: values resolve transitively from the dev stack.
+      # Clear any stale per-stack overrides left by the old per-stack
+      # seeding — an override permanently shadows the import (zbb never
+      # clobbers user overrides), so rotation would stop propagating.
+      for v in $DEV_VARS; do
+        zbb --slot "$SLOT" --stack "$sname" env unset "$v" >/dev/null 2>&1 || true
+      done
+      say "  stack $sname: inherits creds from the dev stack (stale overrides cleared)"
+    else
+      # Outdated checkout (zbb.yaml has no dev imports yet) or the dev
+      # stack couldn't be added: legacy direct seeding. zbb errors hard
+      # on vars the stack's zbb.yaml doesn't declare — an outdated
+      # checkout must not abort the whole run: warn, skip, and let the
+      # not-green phase-1 check re-surface it next run.
+      seed_var() { # $1=var $2=value
+        zbb --slot "$SLOT" --stack "$sname" env set "$1" "$2" >/dev/null 2>&1 \
+          || say "  ⚠ stack $sname: $1 not declared in its zbb.yaml (outdated checkout?) — skipped"
+      }
+      seed_var ZB_API_KEY "$ZB_API_KEY"
+      seed_var ZB_TOKEN "$ZB_TOKEN"
+      seed_var ZB_ORG_ID "$ZB_ORG_ID"
+      seed_var ZB_PLATFORM_URL "$ZB_PLATFORM_URL"
+      seed_var NPM_CONFIG_TAG dev
+      seed_var KNOWLEDGE_MCP_URL "$(knowledge_url "$ZB_PLATFORM_URL")"
+      say "  stack $sname: directly seeded (update the checkout to inherit from the dev stack)"
+    fi
     # DATALOADER_SERVICE_URL is intentionally NOT set: the gate's Neon step
     # auths with the prod-issued ZB_TOKEN against its prod default
     # (app.zerobias.com/api/dataloader) even for non-prod org targets — a
     # per-env override makes the prod key 401. The org load never reads it
     # (it uses ZB_PLATFORM_URL + ZB_API_KEY). Clear any stale override.
     zbb --slot "$SLOT" --stack "$sname" env unset DATALOADER_SERVICE_URL >/dev/null 2>&1 || true
-    zbb --slot "$SLOT" --stack "$sname" env set NPM_CONFIG_TAG dev >/dev/null
-    # Per-env zb-knowledge endpoint (keys are per-env; .mcp.json's default
-    # is PROD). Declared so far only in the meta stack's zbb.yaml —
-    # `env set` is a silent no-op on stacks that don't declare it, so this
-    # is safe everywhere and starts sticking once a repo declares the var.
-    zbb --slot "$SLOT" --stack "$sname" env set KNOWLEDGE_MCP_URL "$(knowledge_url "$ZB_PLATFORM_URL")" >/dev/null 2>&1 || true
-    say "  stack $sname: ZB_API_KEY + ZB_TOKEN + ZB_ORG_ID + ZB_PLATFORM_URL + NPM_CONFIG_TAG stored (values not shown)"
   done
 fi
 
@@ -710,6 +816,8 @@ say "  $0 --launch [claude args…]"
 say "or directly (works from any directory — never omit --stack: without it"
 say "the session gets NO creds and the MCPs fail):"
 say "  zbb --slot $SLOT --stack $STACK_NAME exec claude"
-say "  (non-prod target: first export KNOWLEDGE_MCP_URL=\"$(knowledge_url "$(slot_get ZB_PLATFORM_URL)")\")"
+say "creds-only session from anywhere (no repo checkout; MCPs only — repo"
+say "gates need the repo's own stack):"
+say "  zbb --slot $SLOT --stack dev exec claude"
 say "First interactive session per repo shows a one-time .mcp.json trust prompt;"
 say "headless runs load it without prompting."
