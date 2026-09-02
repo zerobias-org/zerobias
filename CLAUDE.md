@@ -90,7 +90,8 @@ Before doing anything substantive, orient yourself:
      framework (`crosswalk/`).
 
 5. **Did the user ask to add a product / vendor / compliance content,
-   or wire up a full data integration?** Two skills, pick by scope:
+   a schema, or wire up a full data integration?** Three skills, pick by
+   scope:
    - **Catalog content only** (add a product + its vendor / suite? /
      segments / components / editions / compliance features / control
      links — **no** module, **no** collectorbot): use
@@ -104,7 +105,15 @@ Before doing anything substantive, orient yourself:
      [`/create-connector`](.claude/skills/create-connector/SKILL.md). It
      **delegates Part 1 to `/create-product`**, then adds the module and
      collectorbot via per-phase sub-agents / handoffs.
-   - Underlying model for both:
+   - **Schema only** (new AuditgraphDB classes / interfaces / fields for a
+     product, or a new generic interface in the base schema — **no**
+     catalog work, **no** module): use `/schema--create-schema` (source:
+     [`schema/.claude/skills/create-schema/SKILL.md`](schema/.claude/skills/create-schema/SKILL.md)).
+     Interface-first: a missing generic concept goes into the base schema
+     (Mode B) before any vendor package (Mode A). Org-first SDLC like the
+     catalog skills — gate → `publishOrg` → user verifies in their org →
+     PR to `main`.
+   - Underlying model for the catalog skills:
      [`.claude/docs/catalog-content-model.md`](.claude/docs/catalog-content-model.md).
 
 ---
