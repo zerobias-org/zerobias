@@ -64,12 +64,14 @@ default branch, run `./scripts/update_all.sh`.
 
 Both scripts finish by running
 [`scripts/sync-skills.sh`](scripts/sync-skills.sh), which copies every
-sub-repo's Claude Code skills into the root `.claude/skills/` under
+sub-repo's Claude Code skills and slash commands into the root `.claude/skills/` under
 `<repo>--<skill>` names (gitignored, also refreshed at the start of each
 Claude session). This makes them usable from sessions launched at the
-meta-repo root; each copy opens with a header naming the sub-repo it
-executes in. Edit the source skill inside its sub-repo — never the
-generated copy.
+meta-repo root: each copy opens with a header naming the sub-repo it
+executes in, and its relative links and sibling-skill invocations are
+rewritten (`../../../X` → `../../../<repo>/X`, `/prerequisites` →
+`/<repo>--prerequisites`) so the copy runs as-is, with no workarounds. Edit
+the source skill inside its sub-repo — never the generated copy.
 
 **Requirements:** just `git`. The list of repos to clone lives in
 [`scripts/repos.list`](scripts/repos.list) (committed to this repo),

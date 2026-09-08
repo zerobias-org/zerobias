@@ -90,21 +90,41 @@ Before doing anything substantive, orient yourself:
      framework (`crosswalk/`).
 
 5. **Did the user ask to add a product / vendor / compliance content,
-   or wire up a full data integration?** Two skills, pick by scope:
-   - **Catalog content only** (add a product + its vendor / suite? /
-     segments / components / editions / compliance features / control
-     links — **no** module, **no** collectorbot): use
-     [`/create-product`](.claude/skills/create-product/SKILL.md). It
-     researches the vendor's taxonomy, decides suite-vs-no-suite,
-     **checks whether the product already exists and asks what to do**
-     (update / add missing deps / nothing), and authors content-as-code
-     validated by the gradle gate. This is what most catalog requests want.
-   - **Full data integration** (catalog **+** Hub module **+**
-     collectorbot, interface-targeted schema): use
+   a schema, or wire up a full data integration?** Three skills, pick by
+   scope. Each is the synced copy of a sub-repo skill — **route to it and
+   let it run; never re-describe or shortcut its flow here.** The copy's
+   header names its source and execution context (work from that sub-repo,
+   git operations target that sub-repo).
+   - **Catalog content** (a vendor, a suite, a product with its components /
+     editions / segments): run the leaf skills **in dependency order, each
+     org-first into the same org** — `/vendor--create-vendor` →
+     `/suite--create-suite` (only for a genuine umbrella; default is no
+     suite) → `/product--create-product`. Each one checks whether its
+     package already exists and asks what to do. There is no meta-repo
+     orchestrator for this — the leaves are the flow. ⚠ Not yet covered by
+     any skill: compliance features (`compliance_feature/`), their
+     `supports.yml` wiring in `segment/`, and control links
+     (`elements.yml`) — author by hand per
+     [`.claude/docs/catalog-content-model.md`](.claude/docs/catalog-content-model.md)
+     until a leaf skill exists.
+   - **Full data integration** (catalog **+** schema **+** Hub module **+**
+     collectorbot): use
      [`/create-connector`](.claude/skills/create-connector/SKILL.md). It
-     **delegates Part 1 to `/create-product`**, then adds the module and
-     collectorbot via per-phase sub-agents / handoffs.
-   - Underlying model for both:
+     **delegates Part 1 to the three catalog leaf skills above**, then adds
+     the module and collectorbot via per-phase sub-agents / handoffs. ⚠ Its schema step
+     still says "target a base interface, defer the schema"; that is
+     superseded — collectors emit the package's concrete classes, so the
+     connector flow must run `/schema--create-schema` before the collector.
+     Design pass pending.
+   - **Schema only** (classes / interfaces / fields for a product, or a
+     link or interface the base schema lacks — **no** catalog work, **no**
+     module): use `/schema--create-schema` (source:
+     [`schema/.claude/skills/create-schema/SKILL.md`](schema/.claude/skills/create-schema/SKILL.md)).
+     One rule to know before routing: **nobody edits the base schema in a
+     contribution PR** — what base lacks is declared in the vendor package
+     as a `<Vendor><Base>Base` interface extending base, and zb owners
+     promote at review. The skill owns everything else.
+   - Underlying model for all catalog content:
      [`.claude/docs/catalog-content-model.md`](.claude/docs/catalog-content-model.md).
 
 ---

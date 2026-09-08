@@ -3,7 +3,7 @@
 Team reference for how the ZeroBias open-source **catalog content** (`vendor/`,
 `suite/`, `product/`, `segment/`, `compliance_feature/`) is structured, validated,
 and wired together. Distilled from real connector work (the Wiz CNAPP add,
-2026-06). The [`/create-product`](../skills/create-product/SKILL.md) skill
+2026-06). The catalog leaf skills (`/vendor--create-vendor`, `/suite--create-suite`, `/product--create-product`, synced from their sub-repos)
 automates this (and [`/create-connector`](../skills/create-connector/SKILL.md)
 calls it for the catalog part of a full data integration); this doc is the
 underlying "what / why" so anyone can author or **review** a catalog PR by hand.
@@ -110,7 +110,7 @@ exist** in the live MCP. For catalog discovery use `store.Vendor.get` /
 ## PR hygiene
 
 - **Timing: PRs come LAST.** New/changed content is first `publishOrg`-loaded into
-  the author's own org and iterated there (see `/create-product` dossier §11); PRs
+  the author's own org and iterated there (see the connector research dossier §11); PRs
   are opened only after the user explicitly signs off on the org-loaded result.
 - The content repos PR against **`dev`** (not `main`).
 - **Every PR body MUST carry a ⚠️ SME-review section** — the low-confidence / judgment
