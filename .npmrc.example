@@ -12,6 +12,11 @@
 #   2. Set the env var:    export ZB_TOKEN=...
 #   3. Run npm install inside any sub-repo as normal.
 #
+# Global installs (`npm i -g @zerobias-org/zbb`, `@zerobias-com/platform-dataloader`,
+# `@zerobias-com/zerobias-mcp`) read ONLY $HOME/.npmrc — npm ignores the
+# project copy in global mode — so for those the file must live in $HOME.
+# See docs/RegistrySetup.md#global-cli-installs.
+#
 # DO NOT replace ${ZB_TOKEN} with a literal token string.
 # DO NOT commit this file as `.npmrc` (it's already in .gitignore).
 #

@@ -214,10 +214,11 @@ agent can plan calls without first listing them.
 `zb` is published as an npm package (`@zerobias-com/zerobias-mcp`) and
 runs as a stdio MCP server.
 
-**1. Configure your `.npmrc`** for the `@zerobias-com` and
-`@zerobias-org` scopes (`setup-org-credentials.sh` writes this;
+**1. Configure your user-level `~/.npmrc`** for the `@zerobias-com` and
+`@zerobias-org` scopes — it must be the `$HOME` file, because `npm i -g`
+ignores any project `.npmrc` (`setup-org-credentials.sh` writes this;
 `ZB_TOKEN` comes from the slot at run time — background in
-[`RegistrySetup.md`](RegistrySetup.md)):
+[`RegistrySetup.md`](RegistrySetup.md#global-cli-installs)):
 
 ```ini
 @zerobias-com:registry=https://pkg.zerobias.org
@@ -225,10 +226,13 @@ runs as a stdio MCP server.
 //pkg.zerobias.org/:_authToken=${ZB_TOKEN}
 ```
 
-**2. Install globally:**
+**2. Install globally** (the script does this too; `ZB_TOKEN` must be in
+the shell running npm, so pass it inline or go through the slot):
 
 ```bash
-npm install -g @zerobias-com/zerobias-mcp
+ZB_TOKEN='<prod registry key>' npm install -g @zerobias-com/zerobias-mcp@latest
+# later updates, once a slot exists:
+zbb --slot <slot> --stack dev exec npm i -g @zerobias-com/zerobias-mcp@latest
 ```
 
 This installs the `zb` binary on your `$PATH`.

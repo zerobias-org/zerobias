@@ -341,15 +341,50 @@ docs assume `zbb` is on the user's `$PATH`.
 command -v zbb >/dev/null && zbb --version    # exits cleanly if installed
 ```
 
-**Offer to install if missing:**
+**Offer to install if missing** (no `zbb` yet means no slot yet, so the
+token goes inline — the user pastes it, never you):
 
 ```bash
-npm install -g @zerobias-org/zbb@latest
+cp .npmrc.example ~/.npmrc                                              # once per machine
+ZB_TOKEN='<prod registry key>' npm install -g @zerobias-org/zbb@latest
 ```
 
 **Offer to update on demand** (when the user mentions "latest", hits a
-version-skew error, or asks to refresh tooling) — same command,
-`@latest` re-resolves to the newest published version.
+version-skew error, or asks to refresh tooling) — through the slot,
+`@latest` re-resolves to the newest published version:
+
+```bash
+zbb --slot <slot> --stack dev exec npm i -g @zerobias-org/zbb@latest
+```
+
+> **Global installs — the rule (applies to every ZeroBias CLI).** All of
+> them are private packages on `pkg.zerobias.org`; none exist on public
+> npm, so always use the full scoped name (`@zerobias-org/zbb`, never
+> `zbb`). `npm i -g` **ignores the project `.npmrc`** (npm ≥ 7 reads only
+> `~/.npmrc` in global mode) and interpolates `${ZB_TOKEN}` from the
+> shell at run time — a plain terminal after setup has NO `ZB_TOKEN`
+> (it lives in the slot), so a bare `npm i -g` fails with 401 / `E404`.
+> Diagnose with `cd ~ && npm config get @zerobias-com:registry -g`
+> (must print `https://pkg.zerobias.org`) and `echo ${ZB_TOKEN:+set}`.
+> Fix: wrap in `zbb --slot <slot> --stack dev exec …` or pass the token
+> inline; never paste a literal token into any `.npmrc`. Full rule +
+> table of globals: [`docs/RegistrySetup.md`](docs/RegistrySetup.md#global-cli-installs).
+
+> **Second credential — GitHub Packages Maven.** Every `zbb gate` /
+> `./gradlew` first resolves the `zb.*` gradle plugins from
+> `maven.pkg.github.com/zerobias-org/util`, which returns 401 to anonymous
+> reads. `settings.gradle.kts` takes the first SET of `READ_TOKEN`,
+> `NPM_TOKEN`, `GITHUB_TOKEN` from the shell; it must be a GitHub token
+> with `read:packages` (`ZB_TOKEN` cannot substitute). It is personal and
+> is NOT in the slot — the user exports it in their shell profile, and
+> `zbb exec` passes it through. Symptom: gradle fails at plugin resolution
+> with `401 Unauthorized` from `maven.pkg.github.com` (a machine with a
+> locally-published build-tools in `~/.m2` is silently exempt). Diagnose
+> with the curl probe in
+> [`docs/RegistrySetup.md`](docs/RegistrySetup.md#github-packages-maven-gradle-plugins);
+> fix = export a `read:packages` token (classic PAT, or
+> `gh auth refresh -s read:packages && export GITHUB_TOKEN="$(gh auth token)"`),
+> then relaunch. Never ask the user to paste the token into the session.
 
 > ⚠️ Some sub-repos pin a specific `zbb` version in their docs (e.g.
 > `module/`'s validate step). If a pin is documented in the sub-repo,
@@ -363,6 +398,14 @@ version-skew error, or asks to refresh tooling) — same command,
 
 ### Other CLIs to be aware of
 
+- **`@zerobias-com/platform-dataloader`** (binaries `dataloader`,
+  `datasync`) — global; the content-repo gates (`schema/`, `product/`,
+  `vendor/`, `suite/`, …) run it for their local load step, and each
+  repo's `prerequisites` skill checks it is current. Install / update with
+  the same slot-wrapped `npm i -g …@latest` form as `zbb` above; it is
+  NOT installed by `setup-org-credentials.sh`.
+- **`@zerobias-com/zerobias-mcp`** (binary `zb`) — global; installed by
+  `setup-org-credentials.sh`, updated with the same slot-wrapped form.
 - **`gh`** — required by `scripts/clone-all.sh` to enumerate the org's
   public repos. The script self-checks and prints install instructions
   if it's missing; you don't need to pre-check.
