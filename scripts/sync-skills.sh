@@ -2,7 +2,12 @@
 #
 # sync-skills.sh — copy every sub-repo skill into the meta-repo's root
 # .claude/skills/ under a unique "<repo>--<skill>" name, injecting an
-# execution-context header so each copy states which sub-repo it runs in.
+# execution-context header so each copy states which sub-repo it runs in,
+# and rewriting the body so the copy is DIRECTLY invocable from the root:
+#   - repo-root relative paths  ../../../X            -> ../../../<repo>/X
+#   - sibling-skill paths       ../<name>/SKILL.md    -> ../<repo>--<name>/SKILL.md
+#   - sibling-skill invocations /<name>, `<name>` skill -> /<repo>--<name>
+#   (support files such as templates.md get the same path rewrites)
 #
 # Why: Claude Code only reliably loads skills from the project root's
 # .claude/skills/. Sub-repo skills (module/.claude/skills/…, etc.) are
@@ -54,12 +59,37 @@ done
 
 # Rewrites a skill markdown file: prefixes the frontmatter name (synthesizing
 # frontmatter for bare files) and injects the execution-context header.
-transform() { # <src> <dst> <repo> <new-name> <src-rel>
+transform() { # <src> <dst> <repo> <new-name> <src-rel> <siblings-csv> [support]
     python3 - "$@" <<'PYEOF'
 import json, re, sys
 
-src, dst, repo, newname, srcrel = sys.argv[1:6]
+src, dst, repo, newname, srcrel, siblings_csv = sys.argv[1:7]
+support = len(sys.argv) > 7 and sys.argv[7] == "support"
+siblings = [x for x in siblings_csv.split(",") if x]
+prefix = repo.replace("_", "-")
 text = open(src, encoding="utf-8", errors="replace").read()
+
+def rewrite_body(b: str) -> str:
+    # Paths that climb to the sub-repo root land on the META root once the
+    # copy lives in ROOT/.claude/skills/<copy>/ — point them into the sub-repo.
+    # Order matters: the sibling-skill rule first (it is more specific), then
+    # the generic climb, but never re-prefix a path that already names a repo.
+    for sib in siblings:
+        b = re.sub(rf"\(\.\./{re.escape(sib)}/", f"(../{prefix}--{sib}/", b)
+        # slash commands live in <repo>/.claude/commands/ and reach skills as ../skills/<name>/
+        b = re.sub(rf"\(\.\./skills/{re.escape(sib)}/", f"(../{prefix}--{sib}/", b)
+    b = re.sub(rf"\(\.\./\.\./\.\./(?!{re.escape(repo)}/)", f"(../../../{repo}/", b)
+    if not support:
+        # Slash invocations of sibling skills: /name, `/name`, (`/name`).
+        for sib in siblings:
+            b = re.sub(rf"(?<![\w/-])/{re.escape(sib)}(?![\w-])", f"/{prefix}--{sib}", b)
+            # "the `name` skill" phrasing used by the leaf skills
+            b = re.sub(rf"`{re.escape(sib)}` skill", f"`{prefix}--{sib}` skill", b)
+    return b
+
+if support:
+    open(dst, "w", encoding="utf-8").write(rewrite_body(text))
+    sys.exit(0)
 
 header = (
     f"> **GENERATED — do not edit.** Source: [`{srcrel}`](../../../{srcrel}); "
@@ -111,7 +141,7 @@ else:
     desc = desc or "Sub-repo skill."
     fm_out = f"name: {newname}\ndescription: {json.dumps(desc + ' (from the ' + repo + ' sub-repo)')}"
 
-open(dst, "w", encoding="utf-8").write(f"---\n{fm_out}\n---\n\n{header}{body.lstrip()}")
+open(dst, "w", encoding="utf-8").write(f"---\n{fm_out}\n---\n\n{header}{rewrite_body(body).lstrip()}")
 PYEOF
 }
 
@@ -122,9 +152,15 @@ warned=0
 for entry in */; do
     repo="${entry%/}"
     src_root="$repo/.claude/skills"
-    [ -d "$src_root" ] || continue
+    [ -d "$src_root" ] || [ -d "$repo/.claude/commands" ] || continue
     ((repos_with_skills++)) || true
     prefix="$(echo "$repo" | tr '_' '-')"
+    # Sibling skill names of this repo (dirs with SKILL.md + bare .md files) —
+    # needed so cross-references between a repo's own skills get re-prefixed.
+    siblings=""
+    for sd in "$src_root"/*/; do [ -f "${sd}SKILL.md" ] && siblings="$siblings,$(basename "$sd")"; done
+    for f in "$src_root"/*.md; do [ -f "$f" ] && [ "$(basename "$f" .md)" != README ] && siblings="$siblings,$(basename "$f" .md)"; done
+    siblings="${siblings#,}"
 
     # Skill directories: <repo>/.claude/skills/<name>/SKILL.md (+ support files)
     for sd in "$src_root"/*/; do
@@ -133,7 +169,11 @@ for entry in */; do
         out="$DEST/${prefix}--${skill}"
         rm -rf "$out"
         cp -R "${sd%/}" "$out"
-        if transform "${sd}SKILL.md" "$out/SKILL.md" "$repo" "${prefix}--${skill}" "${sd}SKILL.md"; then
+        # Support markdown (templates.md, …): same path rewrites, no header.
+        for sf in "$out"/*.md; do
+            [ -f "$sf" ] && [ "$(basename "$sf")" != SKILL.md ] && transform "$sf" "$sf" "$repo" "" "" "$siblings" support
+        done
+        if transform "${sd}SKILL.md" "$out/SKILL.md" "$repo" "${prefix}--${skill}" "${sd}SKILL.md" "$siblings"; then
             printf '%s\n' "${sd%/}" > "$out/.source"
             ((synced++)) || true
         else
@@ -144,14 +184,37 @@ for entry in */; do
     done
 
     # Bare skill files: <repo>/.claude/skills/<name>.md
+    # Precedence: a DIRECTORY skill of the same name wins — repos mid-migration
+    # keep the old flat file beside the new <name>/SKILL.md until it's deleted,
+    # and the flat copy must not clobber the dir copy.
     for f in "$src_root"/*.md; do
         [ -f "$f" ] || continue
         base="$(basename "$f" .md)"
         [ "$base" = "README" ] && continue
+        [ -f "$src_root/$base/SKILL.md" ] && continue
         out="$DEST/${prefix}--${base}"
         rm -rf "$out"
         mkdir -p "$out"
-        if transform "$f" "$out/SKILL.md" "$repo" "${prefix}--${base}" "$f"; then
+        if transform "$f" "$out/SKILL.md" "$repo" "${prefix}--${base}" "$f" "$siblings"; then
+            printf '%s\n' "$f" > "$out/.source"
+            ((synced++)) || true
+        else
+            echo "⚠️  failed to transform $f — skipped" >&2
+            rm -rf "$out"
+            ((warned++)) || true
+        fi
+    done
+
+    # Slash commands: <repo>/.claude/commands/<name>.md — synced the same way.
+    # On a name clash with a skill from the same repo, the skill wins.
+    for f in "$repo/.claude/commands"/*.md; do
+        [ -f "$f" ] || continue
+        base="$(basename "$f" .md)"
+        [ "$base" = "README" ] && continue
+        out="$DEST/${prefix}--${base}"
+        [ -d "$out" ] && continue
+        mkdir -p "$out"
+        if transform "$f" "$out/SKILL.md" "$repo" "${prefix}--${base}" "$f" "$siblings"; then
             printf '%s\n' "$f" > "$out/.source"
             ((synced++)) || true
         else

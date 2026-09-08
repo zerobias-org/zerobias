@@ -30,6 +30,12 @@ node_modules/
 .connector/
 .research/
 
+# Session-local working notes (goal tracking, campaign state). Never publish —
+# they can reference people, private repos, and in-flight decisions.
+.status.md
+.skill-audit-findings.md
+.skill-campaign-tasks.md
+
 # Sub-repo clones managed by scripts/clone-all.sh.
 # Each sub-repo lives at the root and is its own git clone — never tracked here.
 # We allow-list the meta-repo's own root directories.
@@ -43,3 +49,6 @@ node_modules/
 # Generated copies of sub-repo skills (scripts/sync-skills.sh). Regenerated
 # by clone-all.sh / update_all.sh — edit the source skill in its sub-repo.
 .claude/skills/*--*/
+
+# local design drafts (published as artifacts, not repo content)
+.claude/docs/design/

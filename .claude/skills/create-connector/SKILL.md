@@ -2,16 +2,18 @@
 name: create-connector
 description: |
   End-to-end orchestrator for adding a new DATA INTEGRATION (connector) in the
-  zerobias-org meta-repo: catalog → module → collectorbot, with interface-targeted
-  schema. USE THIS PROACTIVELY when the user says "add a connector for X", "create
-  a collector for vendor/product Y", "ingest / collect / pull data from <SaaS>",
-  "new integration for <vendor>", "wire up <product> to the platform", "add a new
+  zerobias-org meta-repo: catalog → schema → module → collectorbot. USE THIS
+  PROACTIVELY when the user says "add a connector for X", "create a collector
+  for vendor/product Y", "ingest / collect / pull data from <SaaS>", "new
+  integration for <vendor>", "wire up <product> to the platform", "add a new
   data source", or names a vendor/product not yet in the catalog with intent to
-  make its data available. It does NOT reimplement the catalog work — Part 1
-  delegates to the `/create-product` skill (which checks if the product already
-  exists and asks what to do), then this skill adds the module + collectorbot and
-  targets a schema interface so concrete classes can be authored later. For
-  CATALOG-ONLY needs (no module/collectorbot) use `/create-product` directly.
+  make its data available. It does NOT reimplement any leaf flow — Part 1
+  delegates to the synced catalog leaf skills (/vendor--create-vendor →
+  /suite--create-suite → /product--create-product, each checks existence and
+  asks), the schema comes from /schema--create-schema (the collector emits
+  that package's concrete classes), then module + collectorbot via handoffs.
+  For CATALOG-ONLY needs use the catalog leaf skills directly. ⚠ Body still
+  describes the superseded interface-targeting path — design pass pending.
 ---
 
 # create-connector
