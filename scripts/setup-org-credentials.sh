@@ -32,6 +32,13 @@
 #   - zb MCP profile (~/.config/mcp-zb/credentials.json, written directly;
 #                     profile 'env' holds ${VAR} placeholders that zb
 #                     resolves from its process env at load time)
+# NOT managed, only REPORTED: the GitHub token gradle needs to read the
+# zb.* build plugins from GitHub Packages Maven (maven.pkg.github.com
+# refuses anonymous reads). settings.gradle.kts takes the first SET of
+# READ_TOKEN / NPM_TOKEN / GITHUB_TOKEN from the shell; it must carry the
+# read:packages scope. It is personal, so it lives in the user's shell
+# profile (zbb exec passes the host env through) — this script probes it
+# and prints the fix, never stores it. Docs: docs/RegistrySetup.md.
 # The MCPs themselves need NO registration — the repo ships .mcp.json with
 # ${ZB_ORG_ID}/${ZB_API_KEY} placeholders. Launch claude THROUGH THE SLOT
 # WITH A STACK (--launch, or `zbb --slot <slot> --stack <stack> exec claude`
@@ -471,6 +478,36 @@ registry_ok() { # $1=token → 0 if it can read the verdaccio registry LIVE
   return $rc
 }
 
+GHP_MAVEN_URL="https://maven.pkg.github.com/zerobias-org/util/com/zerobias/build-tools/maven-metadata.xml"
+ghp_maven_report() { # check-only: can gradle read the zb.* plugins? never exits
+  # Mirror settings.gradle.kts: the first SET variable wins (even if empty),
+  # so a stale READ_TOKEN/NPM_TOKEN shadows a valid GITHUB_TOKEN.
+  local name val code
+  for name in READ_TOKEN NPM_TOKEN GITHUB_TOKEN; do
+    [ -n "${!name+x}" ] || continue
+    val="${!name}"
+    code=$(curl -s -o /dev/null -w '%{http_code}' -u "zerobias-org:$val" "$GHP_MAVEN_URL" 2>/dev/null || echo 000)
+    if [ "$code" = "200" ]; then
+      say "✓ GitHub Packages Maven: \$$name reads the zb.* gradle plugins"
+      return 0
+    fi
+    say "⚠ GitHub Packages Maven: \$$name is set but gets HTTP $code — gradle uses"
+    say "  it FIRST (it shadows any later var), so every zbb gate / ./gradlew fails"
+    say "  at plugin resolution. It needs the read:packages scope (classic PAT)"
+    say "  or must be unset so a working var can win. Not stored here — fix your"
+    say "  shell profile. Docs: docs/RegistrySetup.md#github-packages-maven-gradle-plugins"
+    return 1
+  done
+  say "⚠ GitHub Packages Maven: no READ_TOKEN / NPM_TOKEN / GITHUB_TOKEN in this"
+  say "  shell — every zbb gate / ./gradlew fails resolving the zb.* plugins (401)"
+  say "  unless ~/.m2 already holds a locally-published build-tools. Export a GitHub"
+  say "  token with read:packages in your shell profile (personal — not stored here):"
+  say "    export GITHUB_TOKEN='<classic PAT with read:packages>'"
+  say "  or: gh auth refresh -s read:packages && export GITHUB_TOKEN=\"\$(gh auth token)\""
+  say "  Docs: docs/RegistrySetup.md#github-packages-maven-gradle-plugins"
+  return 1
+}
+
 # ── Phase 1: CHECK what's already in place ──────────────────────────────
 slot_ok=false; slot_token=""; slot_api_key=""; slot_org=""; slot_url=""
 if zbb slot list 2>/dev/null | grep -q "$SLOT"; then
@@ -541,6 +578,7 @@ if $slot_ok && $npmrc_ok && $zb_ok && $owner_ok && $reg_ok && ! $RECONF; then
   say "    slot:     $SLOT"
   say "    platform: $slot_url"
   verify_zb "$slot_url" "${slot_api_key:-$slot_token}" "$slot_org" || say "    org:      $slot_org"
+  ghp_maven_report || true
   say ""
   say "  Re-run with --reconfigure to change org / env / keys."
   if $LAUNCH; then launch_claude; fi
@@ -810,6 +848,7 @@ else
 fi
 
 say ""
+ghp_maven_report || true
 if $LAUNCH; then launch_claude; fi
 say "Done. Launch claude with the slot's creds:"
 say "  $0 --launch [claude args…]"

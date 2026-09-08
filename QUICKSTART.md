@@ -25,6 +25,13 @@ fastest path to actually doing something.
 - **A ZeroBias account** at [`app.zerobias.com`](https://app.zerobias.com)
   if you want the live platform integrations below (MCPs, private NPM,
   `zb` CLI). External readers can browse all source without an account.
+- **A GitHub token with `read:packages`** to run any gate or gradle build:
+  the `zb.*` gradle plugins come from GitHub Packages Maven, which refuses
+  anonymous reads. Export it as `GITHUB_TOKEN` in your shell profile
+  (classic PAT, or `gh auth refresh -s read:packages && export
+  GITHUB_TOKEN="$(gh auth token)"`) — it is personal and lives outside
+  the slot. Details:
+  [GitHub Packages Maven](docs/RegistrySetup.md#github-packages-maven-gradle-plugins).
 
 ## Bootstrap
 
@@ -50,7 +57,9 @@ exports, no pasting keys into `claude mcp add`.
 **1. Get your keys.** Log into your target env's app (e.g.
 [`app.zerobias.com`](https://app.zerobias.com)) → **Settings → API
 Keys**. You need an **org OWNER key** for the target org, and (for
-gates/publishing) a **prod registry key**.
+gates/publishing) a **prod registry key**. Have your GitHub
+`read:packages` token exported too (see *What you need*) — the script
+checks it and tells you if gradle would fail, but does not store it.
 
 **2. Run the setup script yourself** — in a normal terminal, *not*
 inside a Claude session, so your keys never enter the session.
@@ -122,7 +131,12 @@ read once at claude startup).
 **Plain-terminal npm** (outside Claude): the registry token lives in
 the slot too — run `zbb --slot <slot> exec npm install`, or export
 `ZB_TOKEN` yourself per
-[`docs/RegistrySetup.md`](docs/RegistrySetup.md).
+[`docs/RegistrySetup.md`](docs/RegistrySetup.md). The same goes for
+**global installs and updates** of the ZeroBias CLIs: `npm i -g` reads
+only `~/.npmrc` (never the repo's `.npmrc`) and still needs the token,
+so run them as `zbb --slot <slot> --stack dev exec npm i -g <pkg>@latest`
+— details and the list of globals in
+[Global CLI installs](docs/RegistrySetup.md#global-cli-installs).
 
 For troubleshooting (`401`, MCP not listed, stale index, etc.):
 [`docs/MCPs.md`](docs/MCPs.md).
@@ -131,14 +145,30 @@ For troubleshooting (`401`, MCP not listed, stale index, etc.):
 
 `zbb` is the ZeroBias CLI that wraps Gradle for every content sub-repo
 (`zbb compile`, `zbb publish`, `zbb dataloader`, slot/stack management).
-Most contributions need it:
+Most contributions need it. It ships as the private package
+`@zerobias-org/zbb` on `pkg.zerobias.org` (there is no `zbb` on public
+npm), so the install needs the registry scopes in **`~/.npmrc`** and
+your **prod registry key** as `ZB_TOKEN`. On a fresh machine this is the
+one install that runs *before* the setup script exists to hold the key,
+so pass it inline:
 
 ```bash
-npm install -g @zerobias-org/zbb@latest
+cp .npmrc.example ~/.npmrc                     # pkg.zerobias.org scopes, ${ZB_TOKEN} placeholder
+ZB_TOKEN='<prod registry key>' npm install -g @zerobias-org/zbb@latest
+```
+
+Then run `./scripts/setup-org-credentials.sh` (above) — it stores the
+key in your slot, so every later global install or update goes through
+the slot instead:
+
+```bash
+zbb --slot <slot> --stack dev exec npm i -g @zerobias-org/zbb@latest
+zbb --slot <slot> --stack dev exec npm i -g @zerobias-com/platform-dataloader@latest   # content-repo gates
 ```
 
 `@latest` re-resolves to the newest published version any time you
-re-run.
+re-run. The full list of global CLIs and why `-g` ignores the repo's
+`.npmrc`: [Global CLI installs](docs/RegistrySetup.md#global-cli-installs).
 
 **Runtime versions.** `zbb` declares `engines: { node: '>=22.0.0' }`, but the
 content sub-repos pin specific versions — `module/.nvmrc` and
