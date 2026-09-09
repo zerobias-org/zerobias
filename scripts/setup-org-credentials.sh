@@ -32,6 +32,9 @@
 #   - zb MCP profile (~/.config/mcp-zb/credentials.json, written directly;
 #                     profile 'env' holds ${VAR} placeholders that zb
 #                     resolves from its process env at load time)
+#   - dataloader CLI (@zerobias-com/platform-dataloader, global — every
+#                     content repo's zbb.yaml `require:` hard-fails preflight
+#                     without it; installed when missing, freshness reported)
 # NOT managed, only REPORTED: the GitHub token gradle needs to read the
 # zb.* build plugins from GitHub Packages Maven (maven.pkg.github.com
 # refuses anonymous reads). settings.gradle.kts takes the first SET of
@@ -508,6 +511,36 @@ ghp_maven_report() { # check-only: can gradle read the zb.* plugins? never exits
   return 1
 }
 
+DL_PKG="@zerobias-com/platform-dataloader"
+dl_installed() { # installed dataloader version, from the global package.json
+  # (`dataloader --version` boots the app and tries a DB connection first —
+  # ~5s and a log wall — so read the manifest instead)
+  node -p "require('$(npm root -g 2>/dev/null)/$DL_PKG/package.json').version" 2>/dev/null || true
+}
+dl_report() { # check-only: installed dataloader vs registry latest; never exits
+  local have latest tmpcache
+  command -v dataloader >/dev/null || return 0
+  have=$(dl_installed)
+  # Registry lookup with the slot's token, from a throwaway dir so a repo
+  # .npmrc can't reroute the @zerobias-com scope (same trap as registry_ok).
+  # `@latest` is explicit on purpose: the dev stack exports NPM_CONFIG_TAG
+  # (content-package env routing), which makes a bare `npm view` resolve
+  # that dist-tag — the tool has none, and the lookup comes back empty.
+  tmpcache=$(mktemp -d)
+  latest=$( cd "$tmpcache" && ZB_TOKEN="$1" npm view "$DL_PKG@latest" version --cache "$tmpcache" 2>/dev/null || true )
+  rm -rf "$tmpcache"
+  if [ -z "$latest" ]; then
+    say "⚠ dataloader ${have:-?} installed; could not read the registry's latest"
+    say "  ($REGISTRY_URL unreachable or the token was refused) — freshness unverified."
+  elif [ "$have" != "$latest" ]; then
+    say "⚠ dataloader ${have:-?} installed, registry latest is $latest — zbb tooling"
+    say "  must be current. Update (global installs need the slot's token):"
+    say "    zbb --slot $SLOT --stack dev exec npm i -g $DL_PKG@latest"
+  else
+    say "✓ dataloader $have (latest)"
+  fi
+}
+
 # ── Phase 1: CHECK what's already in place ──────────────────────────────
 slot_ok=false; slot_token=""; slot_api_key=""; slot_org=""; slot_url=""
 if zbb slot list 2>/dev/null | grep -q "$SLOT"; then
@@ -544,6 +577,10 @@ npmrc_ok=false
 grep -q '@zerobias-org:registry' ~/.npmrc 2>/dev/null && npmrc_ok=true
 $npmrc_ok || need+=("~/.npmrc scopes")
 
+dl_ok=false
+command -v dataloader >/dev/null && dl_ok=true
+$dl_ok || need+=("dataloader CLI ($DL_PKG — zbb preflight hard-requires it)")
+
 zb_ok=false
 if command -v zb >/dev/null && $slot_ok; then
   # zb status exits 0 even on a FAILED connection — check the output.
@@ -573,11 +610,12 @@ elif $slot_ok; then
   need+=("REGISTRY key (stored ZB_TOKEN cannot read $REGISTRY_URL)")
 fi
 
-if $slot_ok && $npmrc_ok && $zb_ok && $owner_ok && $reg_ok && ! $RECONF; then
+if $slot_ok && $npmrc_ok && $dl_ok && $zb_ok && $owner_ok && $reg_ok && ! $RECONF; then
   say "✓ Already configured — nothing to do."
   say "    slot:     $SLOT"
   say "    platform: $slot_url"
   verify_zb "$slot_url" "${slot_api_key:-$slot_token}" "$slot_org" || say "    org:      $slot_org"
+  dl_report "$slot_token"
   ghp_maven_report || true
   say ""
   say "  Re-run with --reconfigure to change org / env / keys."
@@ -779,6 +817,16 @@ if ! $npmrc_ok; then
   printf '@zerobias-com:registry=https://pkg.zerobias.org\n@zerobias-org:registry=https://pkg.zerobias.org\n//pkg.zerobias.org/:_authToken=${ZB_TOKEN}\n' >> ~/.npmrc
 fi
 
+if ! $dl_ok; then
+  say "--- dataloader CLI ($DL_PKG)"
+  # Global install: npm -g reads ONLY ~/.npmrc (scopes ensured above) and
+  # interpolates ${ZB_TOKEN} from the env — passed inline, like the zb
+  # install below. Every content repo's zbb.yaml `require:` exits preflight
+  # without this binary, so setup is not green until it is present.
+  ZB_TOKEN="$ZB_TOKEN" npm install -g "$DL_PKG@latest"
+  say "  installed dataloader $(dl_installed)"
+fi
+
 if ! $zb_ok || $RECONF; then
   say "--- zb MCP profile (write-once interpolated profile 'env')"
   command -v zb >/dev/null || ZB_TOKEN="$ZB_TOKEN" npm install -g @zerobias-com/zerobias-mcp
@@ -848,6 +896,7 @@ else
 fi
 
 say ""
+dl_report "$ZB_TOKEN"
 ghp_maven_report || true
 if $LAUNCH; then launch_claude; fi
 say "Done. Launch claude with the slot's creds:"
