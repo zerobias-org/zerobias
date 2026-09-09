@@ -111,7 +111,7 @@ public npm, so always use the full scoped name:
 |-------------------------------|--------|------------|
 | `@zerobias-org/zbb` | `zbb` | every content repo: gates, publish, slots, stacks |
 | `@zerobias-com/zerobias-mcp` | `zb` | the `zb` MCP server (installed by `setup-org-credentials.sh`) |
-| `@zerobias-com/platform-dataloader` | `dataloader`, `datasync` | the gate's local load step in `schema/`, `product/`, `vendor/`, `suite/`, … |
+| `@zerobias-com/platform-dataloader` | `dataloader`, `datasync` | **hard-required by `zbb` preflight** (`require:` in every content repo's `zbb.yaml`, ≥ 1.0.87): any lifecycle command — `gate`, `dataloader`, `publishOrg`, … — exits before doing anything without it; installed by `setup-org-credentials.sh`, which also reports when it is behind the registry |
 | `@zerobias-com/hub-node` | — (library) | `zbb testHub` in `module/` only |
 
 Two npm facts decide how these installs authenticate:
@@ -147,6 +147,14 @@ Freshness matters: the CLIs move fast and version skew fails in confusing
 ways, so re-run the same `@latest` command whenever a sub-repo's
 prerequisites check reports the installed version behind the registry.
 Honor any version a sub-repo pins in its docs instead of `@latest`.
+
+⚠ **Inside a slot, always spell `@latest` when asking the registry.** The
+shared `dev` stack exports `NPM_CONFIG_TAG` (dist-tag routing for content
+packages), and a bare `npm view <pkg> version` resolves *that* tag — the
+CLIs carry no such tag, so the lookup comes back empty or errors. Use
+`npm view <pkg>@latest version`; `npm i -g <pkg>@latest` is already
+explicit. `zbb` itself does **not** install missing tools: its preflight
+prints the `install:` hint from `zbb.yaml` and exits 1.
 
 ---
 

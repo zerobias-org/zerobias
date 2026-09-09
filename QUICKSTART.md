@@ -158,12 +158,14 @@ ZB_TOKEN='<prod registry key>' npm install -g @zerobias-org/zbb@latest
 ```
 
 Then run `./scripts/setup-org-credentials.sh` (above) — it stores the
-key in your slot, so every later global install or update goes through
-the slot instead:
+key in your slot and installs the other global the content repos cannot
+run without, `@zerobias-com/platform-dataloader` (`zbb` preflight
+hard-requires it and reports when it is behind). Every later global
+install or update goes through the slot instead:
 
 ```bash
 zbb --slot <slot> --stack dev exec npm i -g @zerobias-org/zbb@latest
-zbb --slot <slot> --stack dev exec npm i -g @zerobias-com/platform-dataloader@latest   # content-repo gates
+zbb --slot <slot> --stack dev exec npm i -g @zerobias-com/platform-dataloader@latest
 ```
 
 `@latest` re-resolves to the newest published version any time you
