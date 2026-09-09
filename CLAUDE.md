@@ -399,11 +399,17 @@ zbb --slot <slot> --stack dev exec npm i -g @zerobias-org/zbb@latest
 ### Other CLIs to be aware of
 
 - **`@zerobias-com/platform-dataloader`** (binaries `dataloader`,
-  `datasync`) — global; the content-repo gates (`schema/`, `product/`,
-  `vendor/`, `suite/`, …) run it for their local load step, and each
-  repo's `prerequisites` skill checks it is current. Install / update with
-  the same slot-wrapped `npm i -g …@latest` form as `zbb` above; it is
-  NOT installed by `setup-org-credentials.sh`.
+  `datasync`) — global; **`zbb` preflight hard-requires it** (`require:`
+  in every content repo's `zbb.yaml`, ≥ 1.0.87): `gate`, `dataloader`,
+  `publishOrg`, any lifecycle command exits 1 at preflight without it,
+  printing the `install:` hint — `zbb` never installs it.
+  `setup-org-credentials.sh` installs it when missing and reports when it
+  is behind the registry; update with the same slot-wrapped
+  `npm i -g …@latest` form as `zbb` above. Freshness checks inside a slot
+  must spell `npm view <pkg>@latest version` — the dev stack's
+  `NPM_CONFIG_TAG` makes a bare `npm view` resolve a dist-tag the CLIs
+  don't have. Reading the installed version: the global `package.json`
+  (`dataloader --version` boots the app and dials a DB first, ~5 s).
 - **`@zerobias-com/zerobias-mcp`** (binary `zb`) — global; installed by
   `setup-org-credentials.sh`, updated with the same slot-wrapped form.
 - **`gh`** — required by `scripts/clone-all.sh` to enumerate the org's
