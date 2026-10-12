@@ -121,7 +121,7 @@ Options:
                    values from the newest backup this script stashed.
                    Use as:  eval "\$($0 --restore)"
   --launch [args…] After setup is green, exec 'claude' through
-                   `zbb --slot <slot> exec` from the stack root (= repo
+                   \`zbb --slot <slot> exec\` from the stack root (= repo
                    root; in the meta-repo: the borrowed content repo) —
                    claude sees the slot's creds, verified first. Everything
                    after --launch goes to claude, so a headless run is:
@@ -186,6 +186,7 @@ stack_has_stale_override() { # $1=stack short name
 # --restore: emit export lines that put the ORIGINAL values back, from the
 # newest backup this script wrote. Use as:  eval "$(./scripts/setup-org-credentials.sh --restore)"
 if $RESTORE; then
+  # shellcheck disable=SC2012  # ls -t for newest-first; names are script-written
   f=$(ls -t "$BACKUP_DIR"/*.env 2>/dev/null | head -n1)
   [ -n "${f:-}" ] || { printf '# no stashed originals found in %s\n' "$BACKUP_DIR" >&2; exit 1; }
   cat "$f"
@@ -227,7 +228,8 @@ launch_claude() {
     say "  It must be a PROD-issued registry key. Fix with: $0 --reconfigure"
     exit 1
   fi
-  export KNOWLEDGE_MCP_URL="$(knowledge_url "$url")"
+  KNOWLEDGE_MCP_URL="$(knowledge_url "$url")"
+  export KNOWLEDGE_MCP_URL
   export ZB_API_KEY="$ak"   # slot value (when set) overrides this on inject
   say "Launching claude via slot $SLOT, stack $STACK_NAME (creds verified)…"
   exec zbb --slot "$SLOT" --stack "$STACK_NAME" exec claude ${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}
@@ -309,7 +311,9 @@ org_rows() { # first NON-EMPTY /me/orgs result across all candidate keys
     rows=$(list_orgs "$k")
     [ -n "$rows" ] && { printf '%s' "$rows"; return 0; }
   done
-  for cand in $(ls ~/.zbb/slots/ 2>/dev/null); do
+  for cand_dir in ~/.zbb/slots/*/; do
+    [ -d "$cand_dir" ] || continue
+    cand=$(basename "$cand_dir")
     u=$(zbb --slot "$cand" env get ZB_PLATFORM_URL 2>/dev/null | tail -n1 || true)
     [ "$u" = "$ZB_PLATFORM_URL" ] || continue
     for var in ZB_API_KEY ZB_TOKEN; do
@@ -367,10 +371,12 @@ if [ -f "$LAST_TARGET_FILE" ]; then
 fi
 if [ -z "$def_url" ] || [ -z "$def_org" ]; then
   pairs=""
-  for cand in $(ls ~/.zbb/slots/ 2>/dev/null); do
+  for cand_dir in ~/.zbb/slots/*/; do
+    [ -d "$cand_dir" ] || continue
+    cand=$(basename "$cand_dir")
     u=$(zbb --slot "$cand" env get ZB_PLATFORM_URL 2>/dev/null | tail -n1 || true)
     o=$(zbb --slot "$cand" env get ZB_ORG_ID 2>/dev/null | tail -n1 || true)
-    [ -n "$u" ] && [ -n "$o" ] || continue
+    if [ -z "$u" ] || [ -z "$o" ]; then continue; fi
     case "$pairs" in *"$u $o"*) : ;; *) pairs="${pairs}${u} ${o}
 " ;; esac
   done
@@ -420,7 +426,9 @@ valid ZB_PLATFORM_URL "$ZB_PLATFORM_URL" || { say "✗ '$ZB_PLATFORM_URL' is not
 # ── Slot resolution: SLOT env wins; else REUSE any slot already holding
 #    this exact target; else the canonical name <env>-<org first 8> ─────
 if [ -z "${SLOT:-}" ]; then
-  for cand in $(ls ~/.zbb/slots/ 2>/dev/null); do
+  for cand_dir in ~/.zbb/slots/*/; do
+    [ -d "$cand_dir" ] || continue
+    cand=$(basename "$cand_dir")
     u=$(zbb --slot "$cand" env get ZB_PLATFORM_URL 2>/dev/null | tail -n1 || true)
     o=$(zbb --slot "$cand" env get ZB_ORG_ID 2>/dev/null | tail -n1 || true)
     if [ "$u" = "$ZB_PLATFORM_URL" ] && [ "$o" = "$ZB_ORG_ID" ]; then
@@ -527,6 +535,7 @@ dl_report() { # check-only: installed dataloader vs registry latest; never exits
   # (content-package env routing), which makes a bare `npm view` resolve
   # that dist-tag — the tool has none, and the lookup comes back empty.
   tmpcache=$(mktemp -d)
+  # shellcheck disable=SC2015  # any failure (cd or npm) should yield empty
   latest=$( cd "$tmpcache" && ZB_TOKEN="$1" npm view "$DL_PKG@latest" version --cache "$tmpcache" 2>/dev/null || true )
   rm -rf "$tmpcache"
   if [ -z "$latest" ]; then
@@ -575,6 +584,7 @@ $slot_ok || need+=("slot env ($SLOT)")
 
 npmrc_ok=false
 grep -q '@zerobias-org:registry' ~/.npmrc 2>/dev/null && npmrc_ok=true
+# shellcheck disable=SC2088  # display label, not a path
 $npmrc_ok || need+=("~/.npmrc scopes")
 
 dl_ok=false
@@ -591,6 +601,7 @@ if command -v zb >/dev/null && $slot_ok; then
   zb_out=$(ZB_PLATFORM_URL="$slot_url" ZB_API_KEY="${slot_api_key:-$slot_token}" \
     ZB_TOKEN="${slot_api_key:-$slot_token}" ZB_ORG_ID="$slot_org" \
     zb status 2>/dev/null || true)
+  # shellcheck disable=SC2016  # grep for the literal ${ZB_API_KEY} placeholder
   printf '%s' "$zb_out" | grep -q 'Connected' \
     && printf '%s' "$zb_out" | grep -q '\${ZB_API_KEY}' && zb_ok=true
 fi
@@ -677,13 +688,16 @@ if ! $RECONF; then
   # somewhere this script already owns (that gap once let a dead key win
   # while the good one sat one candidate away).
   reg_srcs=("your shell env" "the slot"); reg_vals=("${ZB_TOKEN:-}" "$slot_token")
+  # shellcheck disable=SC2045  # ls -t for newest-first; names are script-written
   for f in $(ls -t "$BACKUP_DIR"/*.env 2>/dev/null); do
     v=$(LC_ALL=C sed -n 's/^export ZB_TOKEN=//p' "$f" | tail -n1) || true
     [ -n "$v" ] || continue
     eval "v=$v"   # stash() wrote %q-quoted values; unquote
     reg_srcs+=("stashed original ${f##*/}"); reg_vals+=("$v")
   done
-  for cand in $(ls ~/.zbb/slots/ 2>/dev/null); do
+  for cand_dir in ~/.zbb/slots/*/; do
+    [ -d "$cand_dir" ] || continue
+    cand=$(basename "$cand_dir")
     [ "$cand" = "$SLOT" ] && continue
     v=$(zbb --slot "$cand" env get ZB_TOKEN 2>/dev/null | tail -n1 || true)
     [ -n "$v" ] || continue
@@ -814,6 +828,7 @@ fi
 
 if ! $npmrc_ok; then
   say "--- ~/.npmrc scopes"
+  # shellcheck disable=SC2016  # literal ${ZB_TOKEN}: npm interpolates it at run time
   printf '@zerobias-com:registry=https://pkg.zerobias.org\n@zerobias-org:registry=https://pkg.zerobias.org\n//pkg.zerobias.org/:_authToken=${ZB_TOKEN}\n' >> ~/.npmrc
 fi
 
