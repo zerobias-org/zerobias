@@ -112,17 +112,17 @@ plans=()       # action chosen (filled in Phase 2; defaults filled here)
 #   broken       — fetch failed or other error
 
 for repo in "${repos[@]}"; do
-    cd "$META_ROOT/$repo" || { states+=("broken"); notes+=("cannot cd"); branches+=("?"); defaults+=("?"); plans+=("skip"); cd "$META_ROOT"; continue; }
+    cd "$META_ROOT/$repo" || { states+=("broken"); notes+=("cannot cd"); branches+=("?"); defaults+=("?"); plans+=("skip"); cd "$META_ROOT" || exit 1; continue; }
 
     # Default branch
     default=""
-    git fetch origin --quiet 2>/dev/null || { states+=("broken"); notes+=("fetch failed"); branches+=("?"); defaults+=("?"); plans+=("skip"); cd "$META_ROOT"; continue; }
+    git fetch origin --quiet 2>/dev/null || { states+=("broken"); notes+=("fetch failed"); branches+=("?"); defaults+=("?"); plans+=("skip"); cd "$META_ROOT" || exit 1; continue; }
     if git show-ref --verify --quiet refs/remotes/origin/main; then
         default="main"
     elif git show-ref --verify --quiet refs/remotes/origin/master; then
         default="master"
     else
-        states+=("no-default"); notes+=("no main/master at origin"); branches+=("?"); defaults+=("?"); plans+=("skip"); cd "$META_ROOT"; continue
+        states+=("no-default"); notes+=("no main/master at origin"); branches+=("?"); defaults+=("?"); plans+=("skip"); cd "$META_ROOT" || exit 1; continue
     fi
 
     branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
@@ -162,7 +162,7 @@ for repo in "${repos[@]}"; do
 
     branches+=("$branch")
     defaults+=("$default")
-    cd "$META_ROOT"
+    cd "$META_ROOT" || exit 1
 done
 
 # ─── Print audit table ────────────────────────────────────────────────────────
@@ -246,13 +246,13 @@ if [ ${#needs_decision[@]} -gt 0 ]; then
 
         case "$choice" in
             a) echo ""; echo "${C_YELLOW}Aborted. No repos were modified.${C_RESET}"; exit 0 ;;
-            k) plans[$idx]="skip" ;;
+            k) plans[idx]="skip" ;;
             s) case "$state" in
-                dirty)    plans[$idx]="stash-switch-ff" ;;
-                detached) plans[$idx]="switch-ff" ;;
+                dirty)    plans[idx]="stash-switch-ff" ;;
+                detached) plans[idx]="switch-ff" ;;
                esac ;;
-            d) plans[$idx]="discard-switch-ff" ;;
-            r) plans[$idx]="reset-default" ;;
+            d) plans[idx]="discard-switch-ff" ;;
+            r) plans[idx]="reset-default" ;;
         esac
         echo ""
     done
@@ -356,7 +356,7 @@ for i in "${!repos[@]}"; do
         failed_repos+=("$repo")
     fi
 
-    cd "$META_ROOT"
+    cd "$META_ROOT" || exit 1
 done
 
 # Refresh root-level copies of sub-repo skills (see scripts/sync-skills.sh).

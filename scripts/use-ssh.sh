@@ -40,7 +40,7 @@ for entry in */ .[!.]*/; do
     cd "$META_ROOT/$name" || continue
     old_url=$(git remote get-url origin 2>/dev/null || echo "")
     if [ -z "$old_url" ]; then
-        cd "$META_ROOT"; continue
+        cd "$META_ROOT" || exit 1; continue
     fi
 
     if [ "$REVERT" = true ]; then
@@ -54,7 +54,7 @@ for entry in */ .[!.]*/; do
         echo "  $name → $new_url"
         ((count++)) || true
     fi
-    cd "$META_ROOT"
+    cd "$META_ROOT" || exit 1
 done
 
 if [ "$REVERT" = true ]; then
