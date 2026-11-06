@@ -31,6 +31,7 @@ kb
 login
 module
 pipeline
+pipeline-template
 product
 schema
 segment
@@ -39,5 +40,5 @@ suite
 types
 util
 vendor
-zb-dx
+workflow
 zerobias
