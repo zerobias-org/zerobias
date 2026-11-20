@@ -10,49 +10,33 @@
 #
 # Usage:
 #   ./scripts/refresh-repos-list.sh
+#   ./scripts/refresh-repos-list.sh --help
 #
 # Requirements:
 #   - gh CLI installed and authenticated (`gh auth login`)
 #
-# The script preserves the header comments in scripts/repos.list and
-# rewrites only the repo-name list below them.
+# The leading comment block of scripts/repos.list is kept as-is; only
+# the repo-name list below it is rewritten. If the file doesn't exist
+# yet, a default header is written.
 
 set -u
 
 ORG="zerobias-org"
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-META_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-cd "$META_ROOT" || exit 1
-
-if ! command -v gh >/dev/null 2>&1; then
-    echo "❌ gh CLI not found. Install: https://cli.github.com/" >&2
-    exit 1
-fi
-if ! gh auth status >/dev/null 2>&1; then
-    echo "❌ gh CLI not authenticated. Run: gh auth login" >&2
-    exit 1
-fi
-
 REPOS_FILE="scripts/repos.list"
-TMP_FILE="$(mktemp)"
-trap 'rm -f "$TMP_FILE"' EXIT
 
-echo "Fetching public repos from ${ORG}…"
-repos=()
-while IFS= read -r name; do
-    [ -n "$name" ] && repos+=("$name")
-done < <(gh api "orgs/$ORG/repos" --paginate \
-    --jq '.[] | select(.archived == false and .visibility == "public") | .name' | sort)
+usage() {
+    cat <<EOF
+Usage: $0
 
-if [ ${#repos[@]} -eq 0 ]; then
-    echo "⚠️  gh returned 0 repos — refusing to overwrite $REPOS_FILE." >&2
-    exit 1
-fi
+Regenerate $REPOS_FILE from the public, non-archived repos in the
+$ORG GitHub org. Shows a diff before writing; never commits.
 
-# Preserve the file's header (everything up to and including the last
-# comment-only / blank line before the first repo entry).
-{
+Options:
+  -h, --help   Show this help
+EOF
+}
+
+default_header() {
     cat <<'EOF'
 # Public zerobias-org repos to clone into this meta-repo workspace.
 #
@@ -72,19 +56,67 @@ fi
 # `#` are ignored.
 
 EOF
-    printf '%s\n' "${repos[@]}"
+}
+
+# Print the existing file's header: every comment or blank line before
+# the first repo entry. Falls back to the default for a missing file.
+current_header() {
+    if [ -f "$REPOS_FILE" ]; then
+        awk '/^[[:space:]]*(#|$)/ { print; next } { exit }' "$REPOS_FILE"
+    else
+        default_header
+    fi
+}
+
+# Print public, non-archived repo names in the org, sorted.
+fetch_repos() {
+    gh api "orgs/$ORG/repos" --paginate \
+        --jq '.[] | select(.archived == false and .visibility == "public") | .name' |
+        LC_ALL=C sort
+    # Surface gh's exit status, not sort's.
+    return "${PIPESTATUS[0]}"
+}
+
+die() { echo "❌ $*" >&2; exit 1; }
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
+    esac
+done
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/.." || exit 1
+
+command -v gh >/dev/null 2>&1 || die "gh CLI not found. Install: https://cli.github.com/"
+gh auth status >/dev/null 2>&1 || die "gh CLI not authenticated. Run: gh auth login"
+
+echo "Fetching public repos from ${ORG}…"
+repo_names="$(fetch_repos)" || die "gh api failed — leaving $REPOS_FILE untouched."
+[ -n "$repo_names" ] || die "gh returned 0 repos — refusing to overwrite $REPOS_FILE."
+repo_count="$(printf '%s\n' "$repo_names" | wc -l | tr -d ' ')"
+
+# Build the new file next to the target so the final mv is an atomic
+# same-filesystem rename, and so it gets normal (non-0600) permissions.
+TMP_FILE="$(mktemp "$REPOS_FILE.XXXXXX")" || die "could not create temp file."
+trap 'rm -f "$TMP_FILE"' EXIT
+chmod 644 "$TMP_FILE"
+
+{
+    current_header
+    printf '%s\n' "$repo_names"
 } > "$TMP_FILE"
 
-# Diff before clobbering, so the maintainer sees what changed.
-if [ -f "$REPOS_FILE" ] && diff -q "$REPOS_FILE" "$TMP_FILE" >/dev/null; then
-    echo "✅ $REPOS_FILE already current (${#repos[@]} repos)."
+if [ -f "$REPOS_FILE" ] && cmp -s "$REPOS_FILE" "$TMP_FILE"; then
+    echo "✅ $REPOS_FILE already current ($repo_count repos)."
     exit 0
 fi
 
 echo ""
 echo "Changes to $REPOS_FILE:"
 if [ -f "$REPOS_FILE" ]; then
-    diff "$REPOS_FILE" "$TMP_FILE" || true
+    diff "$REPOS_FILE" "$TMP_FILE"
 else
     echo "  (new file)"
 fi
@@ -92,4 +124,4 @@ echo ""
 
 mv "$TMP_FILE" "$REPOS_FILE"
 trap - EXIT
-echo "✅ Wrote $REPOS_FILE (${#repos[@]} repos). Review and commit when ready."
+echo "✅ Wrote $REPOS_FILE ($repo_count repos). Review and commit when ready."
