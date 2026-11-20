@@ -24,6 +24,7 @@ context-pack
 context-util
 crosswalk
 devops
+evidencedefinition
 framework
 framework_test
 get-shit-done
@@ -33,6 +34,8 @@ module
 pipeline
 pipeline-template
 product
+project-template
+qualification
 schema
 segment
 standard
