@@ -59,33 +59,19 @@ if [ ! -f "$REPOS_FILE" ]; then
     exit 1
 fi
 
-# Load .repoignore (names only, ignore comments and blanks).
-ignored=()
-if [ -f .repoignore ]; then
-    while IFS= read -r line; do
-        name="${line%%#*}"
-        name="${name#"${name%%[![:space:]]*}"}"
-        name="${name%"${name##*[![:space:]]}"}"
-        [ -n "$name" ] && ignored+=("$name")
-    done < .repoignore
-fi
+# shellcheck source=lib/name-list.sh
+. "$SCRIPT_DIR/lib/name-list.sh"
+
+mapfile -t ignored < <(read_name_list .repoignore)
+mapfile -t repos < <(read_name_list "$REPOS_FILE")
 
 is_ignored() {
-    local target="$1"
+    local target="$1" n
     for n in "${ignored[@]}"; do
         [ "$n" = "$target" ] && return 0
     done
     return 1
 }
-
-# Read repos.list, stripping comments + blanks.
-repos=()
-while IFS= read -r line; do
-    name="${line%%#*}"
-    name="${name#"${name%%[![:space:]]*}"}"
-    name="${name%"${name##*[![:space:]]}"}"
-    [ -n "$name" ] && repos+=("$name")
-done < "$REPOS_FILE"
 
 if [ ${#repos[@]} -eq 0 ]; then
     echo "⚠️  $REPOS_FILE is empty." >&2

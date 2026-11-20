@@ -14,8 +14,9 @@
 # Requirements:
 #   - gh CLI installed and authenticated (`gh auth login`)
 #
-# The script preserves the header comments in scripts/repos.list and
-# rewrites only the repo-name list below them.
+# The script keeps the header comments at the top of scripts/repos.list
+# as they are and rewrites only the repo-name list below them. It writes
+# every public, non-archived repo; .repoignore is applied at clone time.
 
 set -u
 
@@ -50,28 +51,20 @@ if [ ${#repos[@]} -eq 0 ]; then
     exit 1
 fi
 
-# Preserve the file's header (everything up to and including the last
-# comment-only / blank line before the first repo entry).
-{
-    cat <<'EOF'
-# Public zerobias-org repos to clone into this meta-repo workspace.
-#
-# This file is the source of truth for scripts/clone-all.sh — no live
-# GitHub lookup happens at clone time. Maintainers regenerate it with:
-#
-#   ./scripts/refresh-repos-list.sh
-#
-# (which uses the gh CLI to enumerate the org). Regular contributors
-# don't need gh, just git.
-#
-# Entries listed in .repoignore (such as .github and the meta-repo
-# itself) are skipped even if they appear here, so the list can mirror
-# the org 1:1 without manual filtering.
-#
-# Format: one repo name per line. Blank lines and lines starting with
-# `#` are ignored.
+# Keep the existing header verbatim, so it is edited in one place: the
+# list file itself. A missing or header-less file gets a minimal one.
+# shellcheck source=lib/name-list.sh
+. "$SCRIPT_DIR/lib/name-list.sh"
 
-EOF
+header=""
+[ -f "$REPOS_FILE" ] && header="$(read_list_header "$REPOS_FILE")"
+if [ -z "$header" ]; then
+    header="# Public $ORG repos for scripts/clone-all.sh.
+# Regenerate with ./scripts/refresh-repos-list.sh; skip entries via .repoignore."
+fi
+
+{
+    printf '%s\n\n' "$header"
     printf '%s\n' "${repos[@]}"
 } > "$TMP_FILE"
 
