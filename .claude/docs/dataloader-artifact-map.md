@@ -20,7 +20,7 @@ in a browser (self-contained, no build step).
 > maintainers keep it in their personal `~/.claude/skills/`. External users:
 > if the "Last validated" date looks stale or something here contradicts
 > observed dataloader behavior, please open an issue on
-> `zerobias-org/zerobias-org` rather than guessing.
+> `zerobias-org/zerobias` rather than guessing.
 
 ---
 
