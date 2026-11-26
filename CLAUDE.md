@@ -25,11 +25,6 @@ For a human-oriented overview (vocabulary, repo inventory, common
 tasks), see [`README.md`](README.md). This file gives the agent-oriented
 view.
 
-**Product direction:** all work here follows the shared Zerobias product
-direction and principles:
-
-@~/.claude/zerobias-product-context.md
-
 ---
 
 ## First-action checklist
