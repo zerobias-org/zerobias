@@ -40,6 +40,7 @@ schema
 segment
 standard
 suite
+tag
 types
 util
 vendor
