@@ -62,12 +62,21 @@ fi
 # shellcheck source=lib/name-list.sh
 . "$SCRIPT_DIR/lib/name-list.sh"
 
-mapfile -t ignored < <(read_name_list .repoignore)
-mapfile -t repos < <(read_name_list "$REPOS_FILE")
+# No mapfile: macOS ships bash 3.2 as /bin/bash.
+ignored=()
+while IFS= read -r name; do
+    ignored+=("$name")
+done < <(read_name_list .repoignore)
+
+repos=()
+while IFS= read -r name; do
+    repos+=("$name")
+done < <(read_name_list "$REPOS_FILE")
 
 is_ignored() {
     local target="$1" n
-    for n in "${ignored[@]}"; do
+    # The ${arr[@]+…} guard keeps an empty list from tripping `set -u` on bash 3.2.
+    for n in ${ignored[@]+"${ignored[@]}"}; do
         [ "$n" = "$target" ] && return 0
     done
     return 1
