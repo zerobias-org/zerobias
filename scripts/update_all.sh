@@ -14,16 +14,21 @@
 #
 # Usage:
 #   ./scripts/update_all.sh             # interactive
+#   ./scripts/update_all.sh --yes       # non-interactive; apply only the safe plan
 #   ./scripts/update_all.sh --dry-run   # audit only; print state table and exit
 #   ./scripts/update_all.sh --help
+#
+# Prompts read from the controlling terminal when there is one, else from
+# stdin — so answers can be piped in (e.g. from an agent or CI runner).
 
 set -u
 
 DRY_RUN=false
+YES=false
 
 usage() {
     cat <<EOF
-Usage: $0 [--dry-run]
+Usage: $0 [--dry-run | --yes]
 
 Bring every sub-repo at the meta-repo root to the tip of its default branch.
 
@@ -33,13 +38,20 @@ confirm step.
 
 Options:
   --dry-run    Print the audit table and exit. No prompts, no changes.
+  -y, --yes    Non-interactive: skip every repo that needs a decision (dirty,
+               ahead, diverged, detached) and apply the rest without asking.
+               Never stashes, discards or resets anything.
   -h, --help   Show this help.
+
+Without a terminal, prompts read from stdin; if stdin runs out the run
+aborts before anything is modified.
 EOF
 }
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) DRY_RUN=true ;;
+        -y|--yes) YES=true ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -62,6 +74,31 @@ if [ -t 1 ]; then
 else
     C_RESET=""; C_BOLD=""; C_DIM=""; C_RED=""; C_GREEN=""; C_YELLOW=""; C_CYAN=""
 fi
+
+# ─── Prompt input ─────────────────────────────────────────────────────────────
+# Prefer the controlling terminal (so prompts work even when stdout/stdin are
+# redirected); fall back to stdin when there is none (agents, CI, cron).
+if { : </dev/tty; } 2>/dev/null; then
+    PROMPT_IN=/dev/tty
+else
+    PROMPT_IN=/dev/stdin
+fi
+
+# ask <prompt> <var> — read one line into <var>; returns 1 on EOF.
+ask() {
+    local reply
+    printf '%s' "$1"
+    IFS= read -r reply <"$PROMPT_IN" || { echo ""; return 1; }
+    # Echo piped answers so the transcript shows what was chosen.
+    [ -t 0 ] || [ "$PROMPT_IN" = /dev/tty ] || echo "$reply"
+    printf -v "$2" '%s' "$reply"
+}
+
+no_input_abort() {
+    echo "${C_YELLOW}No input — aborting. No repos were modified.${C_RESET}"
+    echo "Re-run with --yes to apply the safe plan non-interactively."
+    exit 130
+}
 
 # Meta-repo's own root dirs — never managed as sub-repos.
 META_OWN_DIRS=(.claude .github docs scripts)
@@ -191,7 +228,14 @@ for i in "${!repos[@]}"; do
     [ -z "${plans[$i]}" ] && needs_decision+=("$i")
 done
 
-if [ ${#needs_decision[@]} -gt 0 ]; then
+if [ ${#needs_decision[@]} -gt 0 ] && [ "$YES" = true ]; then
+    echo "${C_BOLD}Phase 2/4: --yes — skipping ${#needs_decision[@]} repo(s) that need a decision:${C_RESET}"
+    for idx in "${needs_decision[@]}"; do
+        printf "  %-24s %s\n" "${repos[$idx]}" "${states[$idx]} (${notes[$idx]})"
+        plans[idx]="skip"
+    done
+    echo ""
+elif [ ${#needs_decision[@]} -gt 0 ]; then
     echo "${C_BOLD}Phase 2/4: ${#needs_decision[@]} repo(s) need a decision.${C_RESET}"
     echo ""
 
@@ -238,7 +282,7 @@ if [ ${#needs_decision[@]} -gt 0 ]; then
         esac
 
         while :; do
-            read -r -p "  choice: " choice </dev/tty || { echo ""; echo "no tty — aborting"; exit 130; }
+            ask "  choice: " choice || no_input_abort
             choice=$(echo "$choice" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
             case " $valid " in *" $choice "*) break ;; esac
             echo "  invalid; expected one of: $valid"
@@ -289,7 +333,12 @@ for i in "${!repos[@]}"; do
 done
 echo ""
 
-read -r -p "Proceed? [y/N] " ok </dev/tty || { echo ""; echo "no tty — aborting"; exit 130; }
+if [ "$YES" = true ]; then
+    echo "Proceeding (--yes)."
+    ok=y
+else
+    ask "Proceed? [y/N] " ok || no_input_abort
+fi
 case "$ok" in
     y|Y|yes|YES) ;;
     *) echo "${C_YELLOW}Aborted. No repos were modified.${C_RESET}"; exit 0 ;;

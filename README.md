@@ -251,8 +251,11 @@ After scaffold: edit `index.yml`, then `npm install && npm shrinkwrap && npm run
 `update_all.sh` works in phases — it audits each sub-repo, prompts only
 when a working tree is dirty or diverged, shows the full plan, and only
 then applies changes. Pass `--dry-run` to see the state table without
-prompting. Repos on feature branches with clean working trees are
-auto-switched back to the default branch and fast-forwarded.
+prompting, or `--yes` to run without a terminal (agents, CI): it skips
+every repo that needs a decision and applies only the safe updates.
+Without a terminal and without `--yes`, prompts read from stdin. Repos
+on feature branches with clean working trees are auto-switched back to
+the default branch and fast-forwarded.
 
 > **Note:** the list of repos to clone lives in
 > [`scripts/repos.list`](scripts/repos.list). If a new public repo is

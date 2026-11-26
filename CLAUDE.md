@@ -56,7 +56,13 @@ Before doing anything substantive, orient yourself:
    ```bash
    ./scripts/update_all.sh --dry-run    # audit only
    ./scripts/update_all.sh              # interactive plan-then-execute
+   ./scripts/update_all.sh --yes        # no prompts: apply the safe plan
    ```
+
+   Agent sessions have no terminal: after the user approves the
+   dry-run plan, run with `--yes`. It skips every repo that needs a
+   decision (dirty / ahead / diverged / detached) and never stashes,
+   discards or resets — report those repos back to the user instead.
 
    The script is safe-by-default: it audits every sub-repo, prompts
    only for dirty/divergent ones, prints the full plan, and asks one
