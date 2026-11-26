@@ -24,6 +24,7 @@ context-pack
 context-util
 crosswalk
 devops
+evidencedefinition
 framework
 framework_test
 get-shit-done
@@ -31,13 +32,17 @@ kb
 login
 module
 pipeline
+pipeline-template
 product
+project-template
+qualification
 schema
 segment
 standard
 suite
+tag
 types
 util
 vendor
-zb-dx
+workflow
 zerobias
